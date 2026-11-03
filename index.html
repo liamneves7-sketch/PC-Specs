@@ -1,0 +1,3137 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D PC Build, Side-by-Side Dual Monitors & 2024 vs 2026 Market Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, #1e293b 0%, #090d16 100%);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.65);
+        }
+        .component-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .component-card:hover {
+            transform: translateX(4px);
+        }
+        .component-card.active {
+            background: linear-gradient(90deg, rgba(6, 182, 212, 0.18) 0%, rgba(15, 23, 42, 0.6) 100%);
+            border-left: 3px solid #06b6d4;
+        }
+        .glow-badge {
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.35);
+        }
+        /* Drag Resizer Gutter Styles */
+        .resizer-gutter {
+            width: 6px;
+            background: rgba(15, 23, 42, 0.9);
+            border-left: 1px solid rgba(51, 65, 85, 0.5);
+            border-right: 1px solid rgba(51, 65, 85, 0.5);
+            cursor: col-resize;
+            position: relative;
+            z-index: 25;
+            transition: background 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .resizer-gutter:hover, .resizer-gutter.dragging {
+            background: rgba(6, 182, 212, 0.45);
+        }
+        .resizer-gutter::after {
+            content: "";
+            width: 2px;
+            height: 28px;
+            background: rgba(148, 163, 184, 0.45);
+            border-radius: 2px;
+        }
+        .draggable-hud {
+            cursor: move;
+            user-select: none;
+        }
+        .draggable-hud:active {
+            border-color: rgba(6, 182, 212, 0.85);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col select-none overflow-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="h-14 border-b border-slate-800 bg-slate-950/90 px-4 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400 glow-badge">
+                <i class="fa-solid fa-computer text-lg"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 id="rig-title-display" class="font-bold text-slate-100 tracking-tight text-sm sm:text-base">PHANTEKS-DUAL-MONITOR RIG</h1>
+                    <button id="edit-rig-btn" class="text-xs text-slate-400 hover:text-cyan-400 transition" title="Rename Rig & OS">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <span id="rig-os-display" class="hidden sm:inline-block text-[11px] mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">2024 Build vs. 2026 Market Inflation</span>
+                </div>
+                <p class="text-[11px] text-slate-400 flex items-center gap-2">
+                    <span>Drag splitters or HUD cards to resize & reposition sections</span>
+                    <span class="text-slate-600">•</span>
+                    <span id="user-id-badge" class="mono text-[10px] text-emerald-400">2024 Paid vs 2026 Market</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Center/Right Workspace Layout & Action Controls -->
+        <div class="flex items-center space-x-2.5">
+            <!-- Layout & Section Position Controls -->
+            <div class="hidden xl:flex items-center space-x-1.5 bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 text-xs">
+                <span class="text-[10px] font-mono uppercase text-slate-400 mr-1"><i class="fa-solid fa-table-columns text-cyan-400 mr-1"></i>Layout:</span>
+                <button id="layout-preset-standard" class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-medium transition" title="Left List | Center 3D | Right Inspector">
+                    Standard
+                </button>
+                <button id="layout-preset-wide3d" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition" title="Left 3D Viewport | Center List | Right Inspector">
+                    3D Left
+                </button>
+                <button id="layout-preset-swap" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition" title="Left Inspector | Center 3D | Right List">
+                    Swap Sides
+                </button>
+                <div class="h-3 w-px bg-slate-700 mx-1"></div>
+                <button id="reset-layout-btn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] transition" title="Reset Section Widths & HUD Positions">
+                    <i class="fa-solid fa-arrows-to-dot"></i> Reset Sizes
+                </button>
+            </div>
+
+            <!-- System Health Status Bar -->
+            <div class="hidden md:flex items-center space-x-3 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+                <div class="flex items-center space-x-1.5">
+                    <span id="global-health-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="global-health-text" class="font-semibold text-emerald-400">Optimal</span>
+                </div>
+                <div class="h-3 w-px bg-slate-800"></div>
+                <div class="flex items-center space-x-1">
+                    <span class="text-slate-400">Issues:</span>
+                    <span id="open-issues-count" class="mono font-bold text-white">0</span>
+                </div>
+                <div class="h-3 w-px bg-slate-800"></div>
+                <div class="flex items-center space-x-1">
+                    <span class="text-slate-400">Logs:</span>
+                    <span id="total-logs-count" class="mono font-bold text-white">0</span>
+                </div>
+            </div>
+
+            <button id="open-add-hw-modal-btn" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs px-3 py-2 rounded-lg shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 transition" title="Add New 3D Hardware or Future Upgrade">
+                <i class="fa-solid fa-cube"></i>
+                <span class="hidden sm:inline">+ Add Hardware</span>
+            </button>
+
+            <button id="open-log-modal-btn" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs px-3.5 py-2 rounded-lg shadow-lg shadow-cyan-500/20 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span class="hidden sm:inline">Log Event</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace Layout (Supports Dynamic Drag Resizing & Section Reordering) -->
+    <main id="workspace-container" class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- SECTION A: Component Hierarchy Sidebar -->
+        <aside id="section-sidebar" style="width: 295px;" class="w-full lg:w-auto border-b lg:border-b-0 border-slate-800 bg-slate-950/85 flex flex-col shrink-0 z-10 max-h-52 lg:max-h-full min-w-[200px] max-w-[600px]">
+            <div class="p-3 border-b border-slate-800/80 flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-layer-group text-cyan-400"></i> <span id="sidebar-part-count">Components (11)</span>
+                </span>
+                <div class="flex items-center gap-1.5">
+                    <button id="sidebar-add-hw-btn" class="text-[11px] text-emerald-400 hover:underline font-medium" title="Add New 3D Hardware">+ Add</button>
+                    <span class="text-slate-700">•</span>
+                    <button id="show-monitors-btn" class="text-[11px] text-slate-400 hover:text-cyan-400" title="Focus Dual Monitors">Monitors</button>
+                    <span class="text-slate-700">•</span>
+                    <button id="show-tower-btn" class="text-[11px] text-slate-400 hover:text-cyan-400" title="Focus PC Tower">Tower</button>
+                    <span class="text-slate-700">•</span>
+                    <button id="show-all-btn" class="text-[11px] text-cyan-400 hover:underline">All</button>
+                </div>
+            </div>
+
+            <div id="component-list" class="flex-1 overflow-y-auto p-2 space-y-1.5">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <div class="p-2.5 border-t border-slate-800/80 bg-slate-900/40 text-[11px] text-slate-400 flex items-center justify-between">
+                <span><i class="fa-solid fa-arrows-left-right text-cyan-400 mr-1"></i> Drag border to resize</span>
+                <button id="reset-specs-btn" class="text-slate-500 hover:text-rose-400 transition" title="Reset Default Build Specs">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- DRAG RESIZER 1 -->
+        <div id="resizer-left" class="resizer-gutter hidden lg:flex" title="Drag to resize section"></div>
+
+        <!-- SECTION B: Center 3D Viewport -->
+        <section id="section-viewport" class="flex-1 relative flex flex-col min-h-[320px] min-w-[280px] overflow-hidden">
+            <div id="canvas-container" class="flex-1 cursor-grab active:cursor-grabbing">
+                <!-- Floating 3D Hover Tooltip -->
+                <div id="hover-tooltip" class="pointer-events-none fixed hidden z-30 px-3 py-2 rounded-lg glass-panel border border-cyan-500/40 shadow-xl text-xs transform -translate-x-1/2 -translate-y-full -mt-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="font-bold text-cyan-300" id="tooltip-name">GPU</span>
+                        <span class="mono text-[11px] font-semibold text-emerald-400" id="tooltip-cost">Paid: $519.99 → Now: $579.99</span>
+                    </div>
+                    <div class="text-slate-200 text-[11px] font-medium mt-0.5" id="tooltip-model">SAPPHIRE PULSE Radeon RX 7800 XT</div>
+                    <div class="text-[10px] mono text-slate-400 mt-0.5" id="tooltip-temp">16GB GDDR6 • Optimal</div>
+                </div>
+
+                <!-- DRAGGABLE Top-Left Viewport Overlay Info -->
+                <div id="hud-card-inspect" style="top: 12px; left: 12px;" class="draggable-hud absolute z-20 flex flex-col space-y-1.5" title="Drag anywhere inside 3D viewport to reposition">
+                    <div class="glass-panel px-3 py-1.5 rounded-lg text-xs flex items-center space-x-2 border border-slate-700/60 shadow-lg">
+                        <i class="fa-solid fa-grip-vertical text-slate-500 text-[10px]"></i>
+                        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                        <span class="text-slate-400">Inspecting:</span>
+                        <span id="viewport-selected-label" class="font-semibold text-white">Side-by-Side Dual Monitors & Rig</span>
+                    </div>
+                    <div class="glass-panel px-3 py-1.5 rounded-lg text-[11px] text-slate-300 flex items-center space-x-3 border border-slate-800/80 shadow-lg">
+                        <span class="flex items-center gap-1.5"><i class="fa-solid fa-receipt text-emerald-400"></i> 2024 Paid: <strong class="mono text-emerald-400" id="hud-total-cost">$2,296.24</strong></span>
+                        <span class="text-slate-600">|</span>
+                        <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-trend-up text-rose-400"></i> 2026 Market: <strong class="mono text-rose-400" id="hud-market-cost">$2,589.95</strong></span>
+                    </div>
+                </div>
+
+                <!-- DRAGGABLE Power Consumption HUD Overlay (Top Right of Viewport) -->
+                <div id="hud-card-power" style="top: 12px; right: 12px;" class="draggable-hud absolute z-20 glass-panel px-3 py-2 rounded-xl text-xs border border-slate-700/80 shadow-xl w-64" title="Drag anywhere inside 3D viewport to reposition">
+                    <div class="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                        <span class="font-semibold text-cyan-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-grip-vertical text-slate-500 text-[10px]"></i>
+                            <i class="fa-solid fa-bolt-lightning text-amber-400"></i> PSU Power Meter
+                        </span>
+                        <span class="text-[10px] mono text-slate-400">750W GF A3 Gold</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 pt-2 text-center">
+                        <div class="bg-slate-900/90 rounded-lg p-1.5 border border-slate-800">
+                            <div class="text-[9px] uppercase text-slate-400 font-mono">Idle</div>
+                            <div id="hud-power-idle" class="text-xs font-bold mono text-emerald-400 mt-0.5">62W</div>
+                        </div>
+                        <div class="bg-slate-900/90 rounded-lg p-1.5 border border-slate-800">
+                            <div class="text-[9px] uppercase text-slate-400 font-mono">Browser</div>
+                            <div id="hud-power-browser" class="text-xs font-bold mono text-cyan-400 mt-0.5">115W</div>
+                        </div>
+                        <div class="bg-slate-900/90 rounded-lg p-1.5 border border-slate-800">
+                            <div class="text-[9px] uppercase text-slate-400 font-mono">Gaming</div>
+                            <div id="hud-power-gaming" class="text-xs font-bold mono text-amber-400 mt-0.5">425W</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DRAGGABLE Bottom Center 3D Camera & Case Controls -->
+                <div id="hud-card-controls" style="bottom: 16px; left: 50%; transform: translateX(-50%);" class="draggable-hud absolute z-20 flex flex-wrap items-center justify-center gap-1.5 glass-panel px-3 py-2 rounded-xl border border-slate-700/70 shadow-2xl w-[94%] max-w-2xl" title="Drag bar to reposition camera controls">
+                    <i class="fa-solid fa-grip-vertical text-slate-500 text-xs mr-1"></i>
+                    <button id="cam-reset-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-desktop text-cyan-400"></i> <span>Full Desk</span>
+                    </button>
+                    <button id="cam-monitors-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-tv text-cyan-400"></i> <span>Dual Monitors</span>
+                    </button>
+                    <button id="cam-tower-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-server text-cyan-400"></i> <span>Zoom Tower</span>
+                    </button>
+                    <button id="toggle-sidepanel-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-door-open text-cyan-400"></i> <span id="sidepanel-btn-text">Open Glass</span>
+                    </button>
+                    <button id="toggle-explode-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-up-right-and-down-left-from-center text-cyan-400"></i> <span>Explode</span>
+                    </button>
+                    <button id="toggle-rgb-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-lightbulb text-rose-500"></i> <span>RGB</span>
+                    </button>
+                    <button id="toggle-rotate-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-xs text-slate-200 flex items-center gap-1.5 transition border border-slate-700">
+                        <i class="fa-solid fa-rotate text-cyan-400"></i> <span>Orbit</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- DRAG RESIZER 2 -->
+        <div id="resizer-right" class="resizer-gutter hidden lg:flex" title="Drag to resize section"></div>
+
+        <!-- SECTION C: Spec Inspector, 2024 vs 2026 Market Inflation Document, and Logs -->
+        <aside id="section-inspector" style="width: 495px;" class="w-full lg:w-auto border-t lg:border-t-0 border-slate-800 bg-slate-950/90 flex flex-col shrink-0 z-10 max-h-[56vh] lg:max-h-full min-w-[290px] max-w-[820px]">
+            
+            <!-- Inspector Panel Tabs -->
+            <div class="flex border-b border-slate-800 bg-slate-900/50">
+                <button id="tab-specs-btn" class="flex-1 py-3 text-xs font-semibold border-b-2 border-cyan-400 text-cyan-400 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-sliders"></i> Part Specs
+                </button>
+                <button id="tab-document-btn" class="flex-1 py-3 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-chart-line"></i> 2024 Paid vs 2026 Price
+                </button>
+                <button id="tab-logs-btn" class="flex-1 py-3 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-clipboard-list"></i> Logs
+                    <span id="tab-log-badge" class="px-1.5 py-0.2 bg-slate-800 text-cyan-400 rounded-full text-[10px] mono">0</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: Component Details & Spec Editor -->
+            <div id="panel-specs" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Component Header Card -->
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-start justify-between gap-2">
+                    <div class="flex items-start space-x-3">
+                        <div id="spec-icon-box" class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-lg shrink-0 mt-0.5">
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span id="spec-category-title" class="text-xs uppercase tracking-wider text-cyan-400 font-semibold">Processor (CPU)</span>
+                                <span id="spec-status-pill" class="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Optimal</span>
+                            </div>
+                            <h2 id="spec-model-title" class="text-sm font-bold text-white mt-1 leading-snug">AMD Ryzen 7 7700X</h2>
+                            <div class="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] mono">
+                                <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">2024 Paid: <strong id="spec-price-pill">$297.60</strong></span>
+                                <span class="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">Curr Market: <strong id="spec-market-pill">$324.99</strong></span>
+                                <span id="spec-delta-pill" class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">+$27.39 (+9.2%)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="focus-3d-btn" class="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 transition shrink-0" title="Focus Camera on Part">
+                        <i class="fa-solid fa-crosshairs mr-1"></i>Focus
+                    </button>
+                </div>
+
+                <!-- Integrated Power Consumption Analysis Card -->
+                <div class="p-3.5 rounded-xl bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 border border-slate-800 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bolt"></i> System Workload Power Calculator
+                        </span>
+                        <span class="text-[10px] mono text-slate-400">750W PSU Headroom: <strong id="psu-headroom" class="text-emerald-400">325W</strong></span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                        <div class="bg-slate-950/80 rounded-lg p-2 border border-slate-800">
+                            <div class="text-[10px] uppercase text-slate-400 font-mono">Desktop Idle</div>
+                            <div id="calc-idle" class="text-sm font-bold mono text-emerald-400 mt-0.5">62 W</div>
+                        </div>
+                        <div class="bg-slate-950/80 rounded-lg p-2 border border-slate-800">
+                            <div class="text-[10px] uppercase text-slate-400 font-mono">Browser / Media</div>
+                            <div id="calc-browser" class="text-sm font-bold mono text-cyan-400 mt-0.5">115 W</div>
+                        </div>
+                        <div class="bg-slate-950/80 rounded-lg p-2 border border-slate-800">
+                            <div class="text-[10px] uppercase text-slate-400 font-mono">Gaming / Edit</div>
+                            <div id="calc-heavy" class="text-sm font-bold mono text-amber-400 mt-0.5">425 W</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editable Spec & Price Comparison Form -->
+                <form id="spec-form" class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Full Hardware Model & Description</label>
+                        <input type="text" id="input-model" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 transition" required>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-emerald-400 mb-1">2024 Price Paid ($)</label>
+                            <input type="number" step="0.01" id="input-actual-cost" class="w-full bg-slate-900 border border-emerald-500/40 rounded-lg px-2.5 py-2 text-xs text-emerald-400 font-semibold mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-rose-400 mb-1">Curr Market Price ($)</label>
+                            <input type="number" step="0.01" id="input-current-price" class="w-full bg-slate-900 border border-rose-500/40 rounded-lg px-2.5 py-2 text-xs text-rose-300 font-semibold mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Initial Max Budget</label>
+                            <input type="text" id="input-projected-cost" placeholder="e.g. $1500 or N/A" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-2 text-xs text-slate-300 mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-400 mb-1">Core Specs / Speed / Resolution</label>
+                            <input type="text" id="input-clock" placeholder="e.g. 280Hz OLED 0.03ms" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-400 mb-1">Telemetry / Wattage / Features</label>
+                            <input type="text" id="input-temp" placeholder="e.g. Primary Monitor • FreeSync Pro" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-400 mb-1">Operational Status</label>
+                            <select id="input-status" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 transition">
+                                <option value="Optimal">Optimal (Healthy)</option>
+                                <option value="Warning">Warning (Check Tuning/Thermal)</option>
+                                <option value="Critical">Critical (Fault/Error)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-medium text-slate-400 mb-1">SKU / Part Number / Driver</label>
+                            <input type="text" id="input-driver" placeholder="e.g. X27U Z1bmiiprx" class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Market Inflation Reason & Build Notes (2024 vs 2026)</label>
+                        <textarea id="input-notes" rows="3" placeholder="Explain why the price increased since 2024, specs, or build notes..." class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 transition resize-none"></textarea>
+                    </div>
+
+                    <div class="pt-1 flex items-center justify-between gap-2">
+                        <button type="submit" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs py-2.5 px-4 rounded-lg shadow-md shadow-cyan-500/10 transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-floppy-disk"></i> Save Part & Market Price
+                        </button>
+                        <button type="button" id="quick-log-part-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2.5 px-3 rounded-lg border border-slate-700 transition flex items-center gap-1.5" title="Log update or error for this specific part">
+                            <i class="fa-solid fa-bug text-amber-400"></i> Log Issue
+                        </button>
+                        <button type="button" id="delete-custom-part-btn" class="hidden bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs py-2.5 px-3 rounded-lg border border-rose-500/40 transition flex items-center gap-1" title="Remove this custom hardware from 3D model">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 3D Hardware Spatial & Appearance Modifier Studio -->
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-cyan-500/30 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-cubes-stacked"></i> 3D Part Position, Scale & Color Studio
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" id="open-add-hw-inline-btn" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-mono transition">
+                                + New Part
+                            </button>
+                            <button type="button" id="reset-3d-transform-btn" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono transition" title="Reset 3D Position & Scale">
+                                Reset 3D
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Freely reposition, rotate, scale, or recolor the currently selected 3D hardware node in real time. All modifications save automatically to your browser profile.
+                    </p>
+
+                    <div class="grid grid-cols-3 gap-2 text-[11px]">
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400 mb-1">
+                                <span>Offset X</span>
+                                <span id="val-pos-x" class="text-cyan-400">0.0</span>
+                            </div>
+                            <input type="range" id="slider-pos-x" min="-8" max="8" step="0.05" value="0" class="w-full accent-cyan-400 cursor-pointer">
+                        </div>
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400 mb-1">
+                                <span>Offset Y</span>
+                                <span id="val-pos-y" class="text-cyan-400">0.0</span>
+                            </div>
+                            <input type="range" id="slider-pos-y" min="-5" max="5" step="0.05" value="0" class="w-full accent-cyan-400 cursor-pointer">
+                        </div>
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400 mb-1">
+                                <span>Offset Z</span>
+                                <span id="val-pos-z" class="text-cyan-400">0.0</span>
+                            </div>
+                            <input type="range" id="slider-pos-z" min="-5" max="5" step="0.05" value="0" class="w-full accent-cyan-400 cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-[11px]">
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400 mb-1">
+                                <span>Rotate Y°</span>
+                                <span id="val-rot-y" class="text-purple-400">0°</span>
+                            </div>
+                            <input type="range" id="slider-rot-y" min="-180" max="180" step="5" value="0" class="w-full accent-purple-400 cursor-pointer">
+                        </div>
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400 mb-1">
+                                <span>3D Scale</span>
+                                <span id="val-scale" class="text-emerald-400">1.00x</span>
+                            </div>
+                            <input type="range" id="slider-scale" min="0.4" max="2.2" step="0.05" value="1" class="w-full accent-emerald-400 cursor-pointer">
+                        </div>
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex flex-col justify-between">
+                            <div class="flex justify-between font-mono text-[10px] text-slate-400">
+                                <span>Tint Color</span>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="check-custom-color" class="rounded bg-slate-900 border-slate-700 text-cyan-400">
+                                    <span class="text-[9px]">On</span>
+                                </label>
+                            </div>
+                            <input type="color" id="picker-custom-color" value="#06b6d4" class="w-full h-5 rounded bg-transparent cursor-pointer border-0 mt-1">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1">
+                        <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="check-part-visible" checked class="rounded bg-slate-900 border-slate-700 text-cyan-400">
+                            <span>Show Component in 3D Scene</span>
+                        </label>
+                        <span class="text-[10px] font-mono text-slate-500">Live 3D Sync Active</span>
+                    </div>
+                </div>
+
+                <!-- Component Specific History Preview -->
+                <div class="pt-3 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Part Event History</h3>
+                        <span id="component-log-count" class="text-[11px] mono text-slate-500">0 entries</span>
+                    </div>
+                    <div id="component-logs-preview" class="space-y-2">
+                        <!-- Filtered logs for selected component -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Master Specs Document & 2024 Paid vs 2026 Current Market Price Comparison -->
+            <div id="panel-document" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+                <div class="p-3.5 rounded-xl bg-gradient-to-br from-slate-900 via-slate-900 to-rose-950/35 border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-scale-unbalanced-flip"></i> 2024 Price Paid vs. 2026 Current Market Value
+                        </span>
+                        <span class="text-[10px] mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Locked-In 2024 Savings</span>
+                    </div>
+                    <p class="text-[11px] text-slate-300 leading-relaxed">
+                        Compares the exact price you paid in <strong>2024</strong> against <strong>current 2026 retail/replacement prices</strong> following recent NAND flash contract hikes (SSDs up ~38%), HBM/DDR5 wafer reallocation (DDR5 RAM up ~35%), and GPU/OLED tariff & supply adjustments.
+                    </p>
+
+                    <!-- Summary KPI Strip: 2024 Paid vs 2026 Current vs Total Saved -->
+                    <div class="grid grid-cols-3 gap-2 pt-1 text-center">
+                        <div class="bg-slate-950/90 border border-emerald-500/30 rounded-xl p-2.5">
+                            <div class="text-[9px] font-mono uppercase text-slate-400">2024 Price Paid (Parts)</div>
+                            <div id="doc-paid-parts" class="text-sm font-bold mono text-emerald-400 mt-0.5">$2,133.19</div>
+                            <div id="doc-paid-all" class="text-[10px] mono text-slate-500 mt-0.5">+$163.05 tax/games</div>
+                        </div>
+                        <div class="bg-slate-950/90 border border-rose-500/30 rounded-xl p-2.5">
+                            <div class="text-[9px] font-mono uppercase text-slate-400">2026 Current Market</div>
+                            <div id="doc-current-parts" class="text-sm font-bold mono text-rose-400 mt-0.5">$2,589.95</div>
+                            <div class="text-[10px] mono text-rose-300/80 mt-0.5">Replacement Cost</div>
+                        </div>
+                        <div class="bg-slate-950/90 border border-amber-500/40 rounded-xl p-2.5">
+                            <div class="text-[9px] font-mono uppercase text-slate-400">Total Market Increase</div>
+                            <div id="doc-inflation-diff" class="text-sm font-bold mono text-amber-400 mt-0.5">+$456.76</div>
+                            <div id="doc-inflation-pct" class="text-[10px] mono text-amber-300 mt-0.5">+21.4% Since 2024</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Highlight Spotlight: RAM & SSD Surge Since 2024 -->
+                <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start space-x-3 text-xs">
+                    <i class="fa-solid fa-microchip text-amber-400 text-base mt-0.5"></i>
+                    <div class="space-y-1">
+                        <div class="font-bold text-amber-300">2024 → 2026 Memory & Storage Surge Spotlight</div>
+                        <p class="text-[11px] text-slate-300 leading-relaxed">
+                            • <strong>DDR5-6000 RAM (32GB Flare X5):</strong> Paid <span class="mono text-emerald-400">$106.99</span> in 2024 → Now <span class="mono text-rose-400">$144.99</span> (<strong class="mono text-amber-300">+$38.00 / +35.5%</strong>) due to SK Hynix/Samsung shifting wafer capacity to AI HBM3e.<br>
+                            • <strong>2TB Gen4 NVMe SSD (Silicon Power UD85):</strong> Paid <span class="mono text-emerald-400">$121.88</span> in 2024 → Now <span class="mono text-rose-400">$168.99</span> (<strong class="mono text-amber-300">+$47.11 / +38.7%</strong>) due to global 3D NAND flash wafer production cuts and enterprise SSD demand.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Master Itemized Table: 2024 Paid vs 2026 Current Price -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Itemized 2024 Purchase Price vs. Current Price</h3>
+                        <span class="text-[10px] text-slate-500 mono">Click any row to inspect in 3D</span>
+                    </div>
+                    <div id="yoy-inflation-table" class="space-y-2">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- Export Document Button -->
+                <div class="pt-2">
+                    <button id="export-doc-btn" class="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/40 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-download"></i> Download Complete Specs & 2024-2026 Cost Report (JSON)
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 3: Full System Maintenance, Update & Error Logger -->
+            <div id="panel-logs" class="hidden flex-1 flex flex-col overflow-hidden p-4 space-y-3">
+                <!-- Filter Controls -->
+                <div class="flex flex-wrap items-center gap-2 pb-2 border-b border-slate-800">
+                    <select id="filter-component" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400">
+                        <option value="all">All Hardware & Monitors</option>
+                        <option value="system">Whole System / OS</option>
+                        <option value="cpu">CPU (Ryzen 7 7700X)</option>
+                        <option value="cooler">CPU Fan (AK620 Zero Dark)</option>
+                        <option value="gpu">GPU (RX 7800 XT Pulse)</option>
+                        <option value="ram">RAM (Flare X5 32GB)</option>
+                        <option value="mobo">Motherboard (B650 Gaming X AX)</option>
+                        <option value="ssd">Storage (SP 2TB UD85 NVMe)</option>
+                        <option value="psu">PSU (Toughpower GF A3 750W)</option>
+                        <option value="case">Case (Phanteks XT Pro Ultra)</option>
+                        <option value="monitor_main">Monitor Main (Acer Predator OLED)</option>
+                        <option value="monitor_sec">Monitor Sec (Acer Nitro 170Hz)</option>
+                        <option value="peripherals">KB & Mouse (MSI Vigor GK30)</option>
+                    </select>
+
+                    <select id="filter-type" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400">
+                        <option value="all">All Types</option>
+                        <option value="Error / BSOD">Errors & BSODs</option>
+                        <option value="Driver / BIOS">Driver / BIOS Update</option>
+                        <option value="Hardware Swap">Hardware / Peripheral Note</option>
+                        <option value="Thermal / Maintenance">Maintenance</option>
+                    </select>
+
+                    <select id="filter-status" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400">
+                        <option value="all">All Status</option>
+                        <option value="unresolved">Open / Active</option>
+                        <option value="resolved">Resolved / Completed</option>
+                    </select>
+                </div>
+
+                <!-- Logs Feed -->
+                <div id="logs-list-container" class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+        </aside>
+    </main>
+
+    <!-- MODAL 1: Add Update / Error / Maintenance Log -->
+    <div id="log-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-terminal text-cyan-400"></i>
+                    <h3 class="text-sm font-bold text-white">Record System Update or Incident</h3>
+                </div>
+                <button id="close-log-modal" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="new-log-form" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Target Component</label>
+                        <select id="log-component" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                            <option value="system">Whole PC / OS</option>
+                            <option value="cpu">CPU: AMD Ryzen 7 7700X</option>
+                            <option value="cooler">Cooler: DeepCool AK620 Zero Dark</option>
+                            <option value="gpu">GPU: Sapphire Pulse RX 7800 XT</option>
+                            <option value="ram">RAM: G.Skill Flare X5 32GB DDR5</option>
+                            <option value="mobo">Mobo: Gigabyte B650 Gaming X AX</option>
+                            <option value="ssd">SSD: Silicon Power 2TB UD85</option>
+                            <option value="psu">PSU: Thermaltake GF A3 750W</option>
+                            <option value="case">Case: Phanteks XT Pro Ultra</option>
+                            <option value="monitor_main">Main Monitor: Acer Predator X27U OLED</option>
+                            <option value="monitor_sec">Secondary Monitor: Acer Nitro 170Hz</option>
+                            <option value="peripherals">KB/Mouse: MSI Vigor GK30 Combo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Event Category</label>
+                        <select id="log-category" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                            <option value="Error / BSOD">Error / Crash / BSOD</option>
+                            <option value="Driver / BIOS">Driver / BIOS Update</option>
+                            <option value="Hardware Swap">Hardware / Peripheral Note</option>
+                            <option value="Thermal / Maintenance">Cleaning / Fan Curve</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Severity / Impact</label>
+                        <select id="log-severity" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                            <option value="Info">Info / Routine Update</option>
+                            <option value="Warning">Warning / Minor Glitch</option>
+                            <option value="Critical">Critical / BSOD / Fault</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Initial Status</label>
+                        <select id="log-resolved" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400">
+                            <option value="true">Completed / Resolved</option>
+                            <option value="false">Open / Needs Investigation</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Summary / Stop Code / Version</label>
+                    <input type="text" id="log-title" placeholder="e.g. OLED Pixel Refresher or Adrenalin 26.10.1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Diagnostics, Symptoms & Resolution Steps</label>
+                    <textarea id="log-description" rows="3" placeholder="Describe what happened, clock speeds, or changes introduced..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 resize-none" required></textarea>
+                </div>
+
+                <div class="flex items-center justify-end space-x-2 pt-2">
+                    <button type="button" id="cancel-log-btn" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition">Save Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Rename Rig / OS Modal -->
+    <div id="rig-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white">System Profile Settings</h3>
+                <button id="close-rig-modal" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="rig-profile-form" class="space-y-3">
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Computer / Host Name</label>
+                    <input type="text" id="rig-name-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Operating System & Build</label>
+                    <input type="text" id="rig-os-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" id="cancel-rig-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">Cancel</button>
+                    <button type="submit" class="px-4 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-semibold text-xs">Update Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Add New 3D Hardware / Future Upgrade Builder -->
+    <div id="add-hw-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-cube text-emerald-400"></i>
+                    <h3 class="text-sm font-bold text-white">Add New 3D Hardware or Future Upgrade</h3>
+                </div>
+                <button id="close-add-hw-modal" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Quick Preset Templates -->
+            <div class="space-y-1.5">
+                <label class="block text-[10px] font-mono uppercase text-slate-400">Quick-Fill Upgrade Templates (Optional)</label>
+                <div class="flex flex-wrap gap-1.5">
+                    <button type="button" data-preset="mx_master" class="hw-preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-computer-mouse mr-1"></i>Logitech MX Master 3S
+                    </button>
+                    <button type="button" data-preset="ssd_2" class="hw-preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-hard-drive mr-1"></i>2nd Gen4 NVMe M.2 (2TB)
+                    </button>
+                    <button type="button" data-preset="ram_64" class="hw-preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-memory mr-1"></i>+32GB Flare X5 (4x16GB)
+                    </button>
+                    <button type="button" data-preset="top_fans" class="hw-preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-fan mr-1"></i>Top Exhaust Fans (2x140mm)
+                    </button>
+                    <button type="button" data-preset="pcie_card" class="hw-preset-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-sd-card mr-1"></i>PCIe Capture / Sound Card
+                    </button>
+                </div>
+            </div>
+
+            <form id="add-hw-form" class="space-y-3 text-xs">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">3D Geometry / Slot Template</label>
+                        <select id="new-hw-template" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                            <option value="nvme_slot2">2nd M.2 NVMe SSD (Motherboard Slot 2)</option>
+                            <option value="ram_extra">Extra DDR5 RAM Sticks (Slots A1/B1)</option>
+                            <option value="top_fan">Top Exhaust 140mm RGB Fan Set</option>
+                            <option value="pcie_addon">PCIe Expansion / Capture Card (Lower Slot)</option>
+                            <option value="sata_ssd">2.5" SATA SSD Drive (Chassis Mount)</option>
+                            <option value="desk_mouse">Ergonomic Wireless Mouse (Logi MX Master)</option>
+                            <option value="speakers">Desktop Studio Speakers (Left & Right)</option>
+                            <option value="webcam">4K Stream Webcam (Top of Main OLED)</option>
+                            <option value="custom_box">Custom 3D Hardware Module</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Category Label</label>
+                        <input type="text" id="new-hw-category" placeholder="e.g. Secondary Storage (M.2)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Full Hardware Model & Name</label>
+                    <input type="text" id="new-hw-model" placeholder="e.g. Logitech MX Master 3S Wireless Performance Mouse" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400" required>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2.5">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-emerald-400 mb-1">Purchase Price ($)</label>
+                        <input type="number" step="0.01" id="new-hw-paid" value="99.99" class="w-full bg-slate-950 border border-emerald-500/40 rounded-lg px-2.5 py-2 text-xs text-emerald-400 font-semibold mono focus:outline-none focus:border-cyan-400" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-rose-400 mb-1">Current Market ($)</label>
+                        <input type="number" step="0.01" id="new-hw-market" value="109.99" class="w-full bg-slate-950 border border-rose-500/40 rounded-lg px-2.5 py-2 text-xs text-rose-300 font-semibold mono focus:outline-none focus:border-cyan-400" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">3D Accent Color</label>
+                        <input type="color" id="new-hw-color" value="#06b6d4" class="w-full h-9 rounded-lg bg-slate-950 border border-slate-700 px-1 py-1 cursor-pointer">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Core Specs / Speed / DPI</label>
+                        <input type="text" id="new-hw-clock" placeholder="e.g. 8000 DPI • MagSpeed Wheel" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Telemetry / Wattage / Connection</label>
+                        <input type="text" id="new-hw-temp" placeholder="e.g. Logi Bolt + Bluetooth • USB-C" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white mono focus:outline-none focus:border-cyan-400">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Upgrade Notes & Market Driver</label>
+                    <textarea id="new-hw-notes" rows="2" placeholder="Notes on why this hardware was added or upgraded..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 resize-none"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                    <button type="button" id="cancel-add-hw-btn" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> Add to 3D Rig & Ledger
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Banner -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-2.5 rounded-xl bg-slate-900 border border-cyan-500/50 text-xs text-white shadow-2xl flex items-center space-x-2.5">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-cyan-400"></i>
+        <span id="toast-msg">Changes saved</span>
+    </div>
+
+    <!-- Complete Self-Contained Application Logic -->
+    <script>
+        // ============================================================================
+        // 1. HARDWARE SPECS, DUAL MONITORS & 2024 PAID VS 2026 MARKET PRICE DATA
+        // ============================================================================
+        const STORAGE_KEY_SPECS = "phanteks_dual_monitors_specs_v6";
+        const STORAGE_KEY_LOGS = "phanteks_dual_monitors_logs_v6";
+
+        const DEFAULT_RIG_PROFILE = {
+            rigName: "PHANTEKS-DUAL-MONITOR RIG",
+            osBuild: "2024 Build vs. 2026 Market Inflation"
+        };
+
+        const DEFAULT_COMPONENTS = {
+            ram: {
+                id: "ram",
+                category: "RAM (DDR5 Memory)",
+                icon: "fa-memory",
+                model: "G.SKILL Flare X5 Series AMD EXPO 32GB (2 x 16GB) DDR5 6000",
+                actualCost: 106.99,
+                currentMarketPrice: 144.99,
+                projectedCost: "N/A",
+                clock: "DDR5-6000 CL36-36-36-96 (288-Pin)",
+                temp: "39°C • 1.35V EXPO",
+                status: "Optimal",
+                driver: "Model: F5-6000J3636F16GX2-FX5",
+                marketFactor: "AI HBM3e Wafer Reallocation & DDR5 IC Surge",
+                notes: "Purchased in 2024 for $106.99. Recent DDR5 spot and retail prices have surged ~35.5% ($144.99) as memory fabs shifted wafer production toward AI HBM3e."
+            },
+            ssd: {
+                id: "ssd",
+                category: "Memory (NVMe SSD)",
+                icon: "fa-hard-drive",
+                model: "Silicon Power 2TB UD85 NVMe 4.0 Gen4 PCIe M.2 SSD",
+                actualCost: 121.88,
+                currentMarketPrice: 168.99,
+                projectedCost: "N/A",
+                clock: "Read: 3,600 MB/s • Write: 2,800 MB/s",
+                temp: "44°C • 2TB Capacity",
+                status: "Optimal",
+                driver: "Model: SU02KGBP44UD8505SN",
+                marketFactor: "3D NAND Flash Wafer Cuts & Enterprise Storage Demand",
+                notes: "Purchased in 2024 for $121.88. 2TB Gen4 NVMe SSDs experienced one of the steepest jumps (+38.7% to $168.99) due to NAND flash contract price hikes since 2024."
+            },
+            gpu: {
+                id: "gpu",
+                category: "GPU (Video Card)",
+                icon: "fa-display",
+                model: "SAPPHIRE PULSE Radeon RX 7800 XT 16GB GDDR6",
+                actualCost: 519.99,
+                currentMarketPrice: 579.99,
+                projectedCost: "N/A",
+                clock: "16GB GDDR6 • 256-Bit • PCIe 4.0 x16",
+                temp: "61°C • ~263W TBP Gaming",
+                status: "Optimal",
+                driver: "SKU: 11330-02-20G",
+                marketFactor: "GDDR6 Memory Costs & 16GB Mid-Range GPU Scarcity",
+                notes: "Bought in 2024 for $519.99. 16GB VRAM cards have climbed to ~$579.99 (+11.5%) due to GDDR6 cost increases and end-of-stock retail premiums."
+            },
+            monitor_main: {
+                id: "monitor_main",
+                category: "Main Monitor (OLED 280Hz)",
+                icon: "fa-tv",
+                model: "Acer Predator 27\" WQHD 2K 1440P 280Hz OLED Gaming Monitor (X27U Z1bmiiprx)",
+                actualCost: 410.66,
+                currentMarketPrice: 549.99,
+                projectedCost: "$1,500.00",
+                clock: "2560 x 1440 WQHD • 280Hz • 0.03ms OLED",
+                temp: "FreeSync Premium Pro • ~35W Draw",
+                status: "Optimal",
+                driver: "SKU: UM.HX0AA.Z01 (Main Display)",
+                marketFactor: "2024 Promo Deal vs. Current Post-Sale OLED Retail",
+                notes: "Snagged at a steep discount for $410.66! Current replacement cost for 27\" 1440p 280Hz OLED panels sits around $549.99 (+33.9% higher than what you paid)."
+            },
+            cpu: {
+                id: "cpu",
+                category: "CPU (Processor)",
+                icon: "fa-microchip",
+                model: "AMD Ryzen 7 7700X - 8-Core 4.5 GHz Socket AM5",
+                actualCost: 297.60,
+                currentMarketPrice: 324.99,
+                projectedCost: "N/A",
+                clock: "4.5 GHz Base / 5.4 GHz Boost (8C/16T)",
+                temp: "62°C • 105W TDP (Peak ~142W PPT)",
+                status: "Optimal",
+                driver: "Part # 100-100000591WOF",
+                marketFactor: "TSMC 5nm Wafer Pricing & AM5 Platform Demand",
+                notes: "Purchased in 2024 for $297.60. Current retail pricing averages $324.99 (+9.2%)."
+            },
+            mobo: {
+                id: "mobo",
+                category: "Motherboard",
+                icon: "fa-chess-board",
+                model: "GIGABYTE B650 GAMING X AX AM5 ATX Motherboard",
+                actualCost: 189.99,
+                currentMarketPrice: 209.99,
+                projectedCost: "N/A",
+                clock: "AMD B650 • AM5 LGA 1718 • DDR5",
+                temp: "43°C VRM • Wi-Fi 6E",
+                status: "Optimal",
+                driver: "5-Year Warranty",
+                marketFactor: "Multi-Layer PCB Copper & Import Tariff Adjustments",
+                notes: "Purchased in 2024 for $189.99. Current market price is ~$209.99 (+10.5%)."
+            },
+            psu: {
+                id: "psu",
+                category: "Power Supply (PSU)",
+                icon: "fa-bolt",
+                model: "Thermaltake Toughpower GF A3 ATX 3.0 750W 80+ Gold",
+                actualCost: 89.99,
+                currentMarketPrice: 109.99,
+                projectedCost: "N/A",
+                clock: "750W 80+ Gold • Full Modular ATX 3.0",
+                temp: "38°C • Smart Zero Fan",
+                status: "Optimal",
+                driver: "Model: PS-TPD-0750FNFAGU-L",
+                marketFactor: "PSU Import Tariffs & ATX 3.0/PCIe 5.0 Demand",
+                notes: "Purchased in 2024 for $89.99. ATX 3.0 750W Gold units have risen to ~$109.99 (+22.2%) following tariff expirations and copper transformer costs."
+            },
+            cooler: {
+                id: "cooler",
+                category: "CPU Fan (Air Cooler)",
+                icon: "fa-fan",
+                model: "DEEPCOOL AK620 ZERO DARK Dual-Tower Air Cooler",
+                actualCost: 64.99,
+                currentMarketPrice: 79.99,
+                projectedCost: "N/A",
+                clock: "2x 120mm FDB Fans (500–1850 RPM)",
+                temp: "260W Heat Dissipation",
+                status: "Optimal",
+                driver: "All-Black Stealth Edition",
+                marketFactor: "US Retail Scarcity & Copper Heatpipe Costs",
+                notes: "Purchased in 2024 for $64.99. Equivalent dual-tower all-black air coolers / remaining stock now command ~$79.99 (+23.1%)."
+            },
+            case: {
+                id: "case",
+                category: "Case (Chassis & 4x Fans)",
+                icon: "fa-box",
+                model: "Phanteks XT Pro Ultra Mid-Tower Gaming Chassis (Black)",
+                actualCost: 89.93,
+                currentMarketPrice: 104.99,
+                projectedCost: "N/A",
+                clock: "4x M25-140 Fans Included (High Airflow)",
+                temp: "28°C Case Ambient",
+                status: "Optimal",
+                driver: "Front USB-C 3.2 Gen2 + Tempered Glass",
+                marketFactor: "Ocean Freight Container Rates & Steel/Glass Costs",
+                notes: "Purchased in 2024 for $89.93 including 4x 140mm fans. Currently retails around $104.99 (+16.7%)."
+            },
+            monitor_sec: {
+                id: "monitor_sec",
+                category: "Secondary Monitor (170Hz)",
+                icon: "fa-desktop",
+                model: "Acer Nitro KG271U Pbiip 27\" 170Hz 2K WQHD Gaming Monitor",
+                actualCost: 186.18,
+                currentMarketPrice: 199.99,
+                projectedCost: "N/A",
+                clock: "2560 x 1440 (WQHD) • 170Hz • ~28W Draw",
+                temp: "AMD FreeSync Premium • HDR",
+                status: "Optimal",
+                driver: "1x DP 1.2 & 2x HDMI 2.0",
+                marketFactor: "WQHD High-Refresh Display Tariff & Freight Adjustment",
+                notes: "Purchased in 2024 for $186.18. Currently lists around $199.99 (+7.4%)."
+            },
+            peripherals: {
+                id: "peripherals",
+                category: "Keyboard & Mouse Combo",
+                icon: "fa-keyboard",
+                model: "MSI Vigor GK30 Combo (GK30 RGB Keyboard & GM11 Mouse)",
+                actualCost: 54.99,
+                currentMarketPrice: 64.99,
+                projectedCost: "$100.00",
+                clock: "6-Zone RGB • 5000 DPI Optical Mouse",
+                temp: "Water Repellent & Splash-Proof",
+                status: "Optimal",
+                driver: "Mech-Like Plunger Switches + GM11",
+                marketFactor: "Peripheral Bundle Retail Price Increase",
+                notes: "Mouse came bundled with keyboard ($54.99 paid in 2024 vs $64.99 current retail, +18.2%). Future upgrade note: Logitech MX Master mouse."
+            }
+        };
+
+        const EXTRA_BUDGET_ITEMS = [
+            {
+                name: "Games & Subscriptions",
+                detail: "Initial games (~$74.06) + PC Game Pass ($17/mo in 2024 → $20/mo in 2026)",
+                actual: 74.06,
+                currentPrice: 89.99,
+                projected: "$150.00",
+                icon: "fa-gamepad"
+            },
+            {
+                name: "Tax & Shipping",
+                detail: "$82.96 + $4.95 + $6.89 + $16.19",
+                actual: 110.99,
+                currentPrice: 132.00,
+                projected: "N/A",
+                icon: "fa-truck-fast"
+            },
+            {
+                name: "Combo & Promo Discounts",
+                detail: "Applied 2024 build savings",
+                actual: -22.00,
+                currentPrice: 0.00,
+                projected: "N/A",
+                icon: "fa-tags"
+            }
+        ];
+
+        const INITIAL_SEED_LOGS = [
+            {
+                id: "seed-1",
+                componentId: "ram",
+                category: "Hardware Swap",
+                severity: "Info",
+                resolved: true,
+                title: "2024 DDR5-6000 Purchase ($106.99) Beat the 2026 RAM Price Surge ($144.99)",
+                description: "Bought G.Skill Flare X5 32GB (2x16GB) DDR5-6000 CL36 in 2024 for $106.99. Current 2026 retail price has climbed +35.5% to $144.99 due to HBM/DDR5 wafer reallocation.",
+                timestamp: Date.now() - 86400000 * 1
+            },
+            {
+                id: "seed-2",
+                componentId: "ssd",
+                category: "Hardware Swap",
+                severity: "Info",
+                resolved: true,
+                title: "2024 2TB Gen4 NVMe Purchase ($121.88) Beat NAND Flash Hike ($168.99)",
+                description: "Purchased Silicon Power 2TB UD85 Gen4 NVMe in 2024 for $121.88 before global 3D NAND flash wafer cuts pushed 2TB drives up +38.7% to ~$168.99.",
+                timestamp: Date.now() - 86400000 * 3
+            },
+            {
+                id: "seed-3",
+                componentId: "monitor_main",
+                category: "Hardware Swap",
+                severity: "Info",
+                resolved: true,
+                title: "Acquired Acer Predator X27U OLED Main Monitor for $410.66 (Now $549.99)",
+                description: "Setup primary Acer Predator 27\" OLED 280Hz 0.03ms monitor side-by-side with the Acer Nitro 170Hz secondary monitor. Saved $139.33 compared to current $549.99 market price.",
+                timestamp: Date.now() - 86400000 * 5
+            }
+        ];
+
+        // ============================================================================
+        // 2. APPLICATION STATE & PERSISTENCE
+        // ============================================================================
+        let rigProfile = { ...DEFAULT_RIG_PROFILE };
+        let componentsData = JSON.parse(JSON.stringify(DEFAULT_COMPONENTS));
+        let logsData = [];
+        let selectedComponentId = "ram";
+
+        function loadSavedData() {
+            try {
+                const rawSpecs = localStorage.getItem(STORAGE_KEY_SPECS);
+                if (rawSpecs) {
+                    const parsed = JSON.parse(rawSpecs);
+                    if (parsed.rigProfile) rigProfile = { ...DEFAULT_RIG_PROFILE, ...parsed.rigProfile };
+                    if (parsed.components) {
+                        Object.keys(DEFAULT_COMPONENTS).forEach(k => {
+                            componentsData[k] = { ...DEFAULT_COMPONENTS[k], ...(parsed.components[k] || {}) };
+                        });
+                        // Also restore any custom user-added hardware components
+                        Object.keys(parsed.components).forEach(k => {
+                            if (!componentsData[k]) {
+                                componentsData[k] = parsed.components[k];
+                            }
+                        });
+                    }
+                }
+                const rawLogs = localStorage.getItem(STORAGE_KEY_LOGS);
+                if (rawLogs) {
+                    logsData = JSON.parse(rawLogs);
+                } else {
+                    logsData = JSON.parse(JSON.stringify(INITIAL_SEED_LOGS));
+                    localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logsData));
+                }
+            } catch (e) {
+                console.error("Failed to load local state:", e);
+                logsData = JSON.parse(JSON.stringify(INITIAL_SEED_LOGS));
+            }
+        }
+
+        function getComponentInflationStats(comp) {
+            const paid = parseFloat(comp.actualCost) || 0;
+            const current = parseFloat(comp.currentMarketPrice) || paid;
+            const diff = current - paid;
+            const pct = paid > 0 ? (diff / paid) * 100 : 0;
+            const sign = diff >= 0 ? "+" : "-";
+            const formattedDiff = `${sign}$${Math.abs(diff).toFixed(2)}`;
+            const formattedPct = `${sign}${Math.abs(pct).toFixed(1)}%`;
+            return { paid, current, diff, pct, formattedDiff, formattedPct };
+        }
+
+        function saveRigSpecsToStorage(notify = true) {
+            try {
+                localStorage.setItem(STORAGE_KEY_SPECS, JSON.stringify({
+                    rigProfile,
+                    components: componentsData,
+                    updatedAt: Date.now()
+                }));
+            } catch (e) {
+                console.error("Error saving specs:", e);
+            }
+            document.getElementById("rig-title-display").textContent = rigProfile.rigName;
+            document.getElementById("rig-os-display").textContent = rigProfile.osBuild;
+            renderComponentSidebar();
+            renderYoYInflationTable();
+            update3DHighlights();
+            if (notify) showToast("2024 vs 2026 price & hardware specs saved");
+        }
+
+        function saveLogsToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logsData));
+            } catch (e) {
+                console.error("Error saving logs:", e);
+            }
+        }
+
+        function showToast(message, isWarning = false) {
+            const toast = document.getElementById("toast");
+            const msgEl = document.getElementById("toast-msg");
+            const iconEl = document.getElementById("toast-icon");
+            msgEl.textContent = message;
+            iconEl.className = isWarning 
+                ? "fa-solid fa-triangle-exclamation text-amber-400" 
+                : "fa-solid fa-circle-check text-cyan-400";
+            toast.classList.remove("hidden");
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 3000);
+        }
+
+        // ============================================================================
+        // 3. THREE.JS 3D DUAL MONITOR WORKSTATION & TOWER ENGINE
+        // ============================================================================
+        let scene, camera, renderer, raycaster, mouse;
+        let pcGroup;
+        let interactiveMeshes = [];
+        let componentGroups = {};
+        let fanBlades = [];
+        let rgbMaterials = [];
+        let glassDoorGroup;
+
+        let hoveredComponentId = null;
+        let isSidePanelOpen = false;
+        let isExplodedView = false;
+        let isRgbCycling = true;
+        let isAutoRotating = false;
+
+        let camSpherical = { radius: 18.2, theta: 0.22, phi: 1.25 };
+        let targetSpherical = { radius: 18.2, theta: 0.22, phi: 1.25 };
+        let camLookAt = new THREE.Vector3(-1.5, -0.4, 0.1);
+        let targetLookAt = new THREE.Vector3(-1.5, -0.4, 0.1);
+
+        const COMPONENT_CAMERA_TARGETS = {
+            all:          { lookAt: new THREE.Vector3(-1.5, -0.4, 0.1),  radius: 18.2, theta: 0.22, phi: 1.25 },
+            monitors:     { lookAt: new THREE.Vector3(-3.8, -0.5, -0.2), radius: 10.6, theta: 0.12, phi: 1.34 },
+            tower:        { lookAt: new THREE.Vector3(2.2, 0.1, 0.0),    radius: 10.8, theta: 0.58, phi: 1.32 },
+            cpu:          { lookAt: new THREE.Vector3(1.9, 1.45, -0.4),  radius: 6.2,  theta: 0.42, phi: 1.35 },
+            cooler:       { lookAt: new THREE.Vector3(1.95, 1.45, -0.1), radius: 6.4,  theta: 0.50, phi: 1.32 },
+            gpu:          { lookAt: new THREE.Vector3(2.15, -0.25, 0.1), radius: 6.8,  theta: 0.50, phi: 1.40 },
+            ram:          { lookAt: new THREE.Vector3(2.85, 1.45, -0.3), radius: 5.8,  theta: 0.35, phi: 1.35 },
+            mobo:         { lookAt: new THREE.Vector3(2.0, 0.65, -0.6),  radius: 8.2,  theta: 0.32, phi: 1.38 },
+            ssd:          { lookAt: new THREE.Vector3(1.95, 0.55, -0.4), radius: 5.8,  theta: 0.40, phi: 1.38 },
+            psu:          { lookAt: new THREE.Vector3(2.0, -2.2, 0.0),   radius: 7.5,  theta: 0.55, phi: 1.46 },
+            case:         { lookAt: new THREE.Vector3(2.2, 0.1, 0.0),    radius: 11.2, theta: 0.65, phi: 1.30 },
+            monitor_main: { lookAt: new THREE.Vector3(-1.65, -0.4, -0.5), radius: 7.8, theta: 0.08, phi: 1.35 },
+            monitor_sec:  { lookAt: new THREE.Vector3(-6.05, -0.4, -0.1), radius: 7.8, theta: 0.24, phi: 1.35 },
+            peripherals:  { lookAt: new THREE.Vector3(-2.3, -2.6, 1.35), radius: 6.8,  theta: 0.10, phi: 1.05 }
+        };
+
+        const EXPLODE_OFFSETS = {
+            cpu:          new THREE.Vector3(0, 0.4, 0.9),
+            cooler:       new THREE.Vector3(0, 0.75, 2.3),
+            gpu:          new THREE.Vector3(0, -0.15, 2.1),
+            ram:          new THREE.Vector3(0.85, 0.4, 1.5),
+            mobo:         new THREE.Vector3(0, 0, -0.6),
+            ssd:          new THREE.Vector3(-0.3, 0, 1.3),
+            psu:          new THREE.Vector3(0, -0.8, 1.2),
+            case:         new THREE.Vector3(0, 0, 0),
+            monitor_main: new THREE.Vector3(0, 0.45, 0.4),
+            monitor_sec:  new THREE.Vector3(-0.6, 0.45, 0.4),
+            peripherals:  new THREE.Vector3(0, 0, 0.65)
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById("canvas-container");
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 130);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.72);
+            scene.add(ambientLight);
+
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+            keyLight.position.set(6, 14, 12);
+            scene.add(keyLight);
+
+            const towerRedLight = new THREE.PointLight(0xef4444, 1.8, 12);
+            towerRedLight.position.set(2.2, 0.6, 1.4);
+            scene.add(towerRedLight);
+
+            const deskPointLight = new THREE.PointLight(0x38bdf8, 1.4, 16);
+            deskPointLight.position.set(-3.2, 1.8, 2.2);
+            scene.add(deskPointLight);
+
+            const deskMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7, metalness: 0.2 });
+            const deskTop = new THREE.Mesh(new THREE.BoxGeometry(17.5, 0.22, 6.8), deskMat);
+            deskTop.position.set(-1.0, -3.38, 0.2);
+            scene.add(deskTop);
+
+            const gridHelper = new THREE.GridHelper(32, 32, 0x1e293b, 0x0f172a);
+            gridHelper.position.y = -3.52;
+            scene.add(gridHelper);
+
+            buildProceduralPC();
+            setupViewportInteractions(renderer.domElement);
+            window.addEventListener("resize", onWindowResize);
+        }
+
+        function registerComponentGroup(id, group) {
+            group.userData.componentId = id;
+            group.userData.basePosition = group.position.clone();
+            componentGroups[id] = group;
+
+            group.traverse((child) => {
+                if (child.isMesh) {
+                    child.userData.componentId = id;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.material) {
+                        child.material = child.material.clone();
+                        child.userData.origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000);
+                        child.userData.origEmissiveIntensity = child.material.emissiveIntensity || 0;
+                    }
+                    interactiveMeshes.push(child);
+                }
+            });
+            pcGroup.add(group);
+        }
+
+        function createFanUnit(radius = 0.52, depth = 0.14, isRedGlow = false) {
+            const fanGroup = new THREE.Group();
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x141a24, roughness: 0.45, metalness: 0.5 });
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(radius * 2.1, radius * 2.1, depth), frameMat);
+            fanGroup.add(frame);
+
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: isRedGlow ? 0xef4444 : 0x06b6d4,
+                emissive: isRedGlow ? 0xdc2626 : 0x06b6d4,
+                emissiveIntensity: 1.1,
+                roughness: 0.2
+            });
+            rgbMaterials.push(ringMat);
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.86, 0.038, 12, 32), ringMat);
+            ring.position.z = depth * 0.52;
+            fanGroup.add(ring);
+
+            const rotor = new THREE.Group();
+            const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.28, radius * 0.28, depth * 0.9, 16), frameMat);
+            hub.rotation.x = Math.PI / 2;
+            rotor.add(hub);
+
+            const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.82, roughness: 0.35 });
+            for (let i = 0; i < 7; i++) {
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.18, radius * 0.62, 0.025), bladeMat);
+                const angle = (i / 7) * Math.PI * 2;
+                blade.position.set(Math.cos(angle) * radius * 0.52, Math.sin(angle) * radius * 0.52, 0);
+                blade.rotation.z = angle - 0.4;
+                blade.rotation.y = 0.35;
+                rotor.add(blade);
+            }
+            fanBlades.push(rotor);
+            fanGroup.add(rotor);
+            return fanGroup;
+        }
+
+        function buildProceduralPC() {
+            pcGroup = new THREE.Group();
+            scene.add(pcGroup);
+
+            const TX = 2.2;
+
+            // 1. CASE: Phanteks XT Pro Ultra Mid-Tower (Black Mesh with Red Front Intake Fans)
+            const caseGroup = new THREE.Group();
+            const caseMetalMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.7, roughness: 0.35 });
+            const meshPanelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.65 });
+            const accentTrimMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.25 });
+
+            const bottomPlate = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 3.2), caseMetalMat);
+            bottomPlate.position.set(TX, -3.1, 0);
+            caseGroup.add(bottomPlate);
+
+            const topPlate = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.18, 3.2), caseMetalMat);
+            topPlate.position.set(TX, 3.1, 0);
+            caseGroup.add(topPlate);
+
+            const ioStrip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.2), new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 0.6 }));
+            ioStrip.position.set(TX + 1.45, 3.20, 0.7);
+            caseGroup.add(ioStrip);
+
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(3.4, 6.2, 0.14), caseMetalMat);
+            backWall.position.set(TX, 0, -1.53);
+            caseGroup.add(backWall);
+
+            const footGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.18, 16);
+            [[-1.3, -3.22, -1.2], [1.3, -3.22, -1.2], [-1.3, -3.22, 1.2], [1.3, -3.22, 1.2]].forEach(([x, y, z]) => {
+                const foot = new THREE.Mesh(footGeo, accentTrimMat);
+                foot.position.set(TX + x, y, z);
+                caseGroup.add(foot);
+            });
+
+            const frontMeshFrame = new THREE.Mesh(new THREE.BoxGeometry(0.14, 6.05, 3.1), meshPanelMat);
+            frontMeshFrame.position.set(TX + 1.65, 0, 0);
+            caseGroup.add(frontMeshFrame);
+
+            // 3x M25 Front Intake Fans with Red Lighting matching user photo
+            for (let i = 0; i < 3; i++) {
+                const m25Intake = createFanUnit(0.58, 0.16, true);
+                m25Intake.rotation.y = Math.PI / 2;
+                m25Intake.position.set(TX + 1.42, 1.65 - i * 1.38, 0.0);
+                caseGroup.add(m25Intake);
+            }
+            const m25Rear = createFanUnit(0.56, 0.16, false);
+            m25Rear.rotation.y = Math.PI / 2;
+            m25Rear.position.set(TX - 1.52, 1.65, -0.2);
+            caseGroup.add(m25Rear);
+
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x94a3b8,
+                transparent: true,
+                opacity: 0.15,
+                roughness: 0.1,
+                metalness: 0.1
+            });
+            glassDoorGroup = new THREE.Group();
+            glassDoorGroup.position.set(TX - 1.7, 0, 1.55);
+            const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(3.35, 6.0, 0.08), glassMat);
+            sideGlass.position.set(1.675, 0, 0);
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.8, 0.14), accentTrimMat);
+            handle.position.set(3.2, 0, 0.06);
+            glassDoorGroup.add(sideGlass, handle);
+            caseGroup.add(glassDoorGroup);
+
+            registerComponentGroup("case", caseGroup);
+
+            // 2. MOTHERBOARD: GIGABYTE B650 GAMING X AX
+            const moboGroup = new THREE.Group();
+            const pcbMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45, metalness: 0.6 });
+            const heatsinkMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.3, metalness: 0.85 });
+
+            const pcb = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.6, 0.12), pcbMat);
+            pcb.position.set(TX - 0.25, 0.65, -1.25);
+            moboGroup.add(pcb);
+
+            const vrmLeft = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.85, 0.34), heatsinkMat);
+            vrmLeft.position.set(TX - 1.2, 1.45, -1.08);
+            moboGroup.add(vrmLeft);
+
+            const vrmTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.36, 0.32), heatsinkMat);
+            vrmTop.position.set(TX - 0.25, 2.22, -1.08);
+            moboGroup.add(vrmTop);
+
+            const chipset = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.75, 0.22), heatsinkMat);
+            chipset.position.set(TX + 0.45, -0.45, -1.12);
+            moboGroup.add(chipset);
+
+            const slotMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.2 });
+            const pcie1 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.16), slotMat);
+            pcie1.position.set(TX - 0.2, 0.05, -1.14);
+            const pcie2 = pcie1.clone();
+            pcie2.position.y = -0.65;
+            moboGroup.add(pcie1, pcie2);
+
+            registerComponentGroup("mobo", moboGroup);
+
+            // 3. CPU: AMD Ryzen 7 7700X AM5
+            const cpuGroup = new THREE.Group();
+            const am5SubstrateMat = new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.4, metalness: 0.5 });
+            const am5IhsMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.2, metalness: 0.95 });
+
+            const cpuSubstrate = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.68, 0.08), am5SubstrateMat);
+            cpuSubstrate.position.set(TX - 0.3, 1.45, -1.15);
+            const cpuIhs = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.12), am5IhsMat);
+            cpuIhs.position.set(TX - 0.3, 1.45, -1.08);
+            cpuGroup.add(cpuSubstrate, cpuIhs);
+
+            registerComponentGroup("cpu", cpuGroup);
+
+            // 4. CPU FAN: DEEPCOOL AK620 ZERO DARK Dual-Tower Air Cooler
+            const coolerGroup = new THREE.Group();
+            const zeroDarkFinMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35, metalness: 0.85 });
+            const zeroDarkTopCapMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.25, metalness: 0.6 });
+
+            const towerLeft = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.28, 0.92), zeroDarkFinMat);
+            towerLeft.position.set(TX - 0.62, 1.45, -0.58);
+            const capLeft = new THREE.Mesh(new THREE.BoxGeometry(0.44, 1.30, 0.06), zeroDarkTopCapMat);
+            capLeft.position.set(TX - 0.62, 1.45, -0.10);
+            coolerGroup.add(towerLeft, capLeft);
+
+            const towerRight = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.28, 0.92), zeroDarkFinMat);
+            towerRight.position.set(TX - 0.02, 1.45, -0.58);
+            const capRight = new THREE.Mesh(new THREE.BoxGeometry(0.44, 1.30, 0.06), zeroDarkTopCapMat);
+            capRight.position.set(TX - 0.02, 1.45, -0.10);
+            coolerGroup.add(towerRight, capRight);
+
+            const centerFan = createFanUnit(0.52, 0.16, false);
+            centerFan.rotation.y = Math.PI / 2;
+            centerFan.position.set(TX - 0.32, 1.45, -0.58);
+            coolerGroup.add(centerFan);
+
+            const frontCoolerFan = createFanUnit(0.52, 0.16, false);
+            frontCoolerFan.rotation.y = Math.PI / 2;
+            frontCoolerFan.position.set(TX + 0.28, 1.45, -0.58);
+            coolerGroup.add(frontCoolerFan);
+
+            registerComponentGroup("cooler", coolerGroup);
+
+            // 5. RAM: G.SKILL Flare X5 32GB (2 x 16GB) DDR5-6000
+            const ramGroup = new THREE.Group();
+            const flareSpreaderMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.75, roughness: 0.35 });
+            const flareStripeMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 0.4 });
+
+            [0.48, 0.72].forEach((xOffset) => {
+                const stick = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.065, 1.08, 0.28), flareSpreaderMat);
+                const topTrim = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.08, 0.04), flareStripeMat);
+                topTrim.position.z = 0.14;
+                stick.add(body, topTrim);
+                stick.position.set(TX + xOffset, 1.45, -1.04);
+                ramGroup.add(stick);
+            });
+
+            registerComponentGroup("ram", ramGroup);
+
+            // 6. SSD: Silicon Power 2TB UD85 NVMe 4.0 M.2
+            const ssdGroup = new THREE.Group();
+            const ssdPcbMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.7, roughness: 0.35 });
+            const spLabelMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.35 });
+
+            const ssdSink = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.32, 0.15), ssdPcbMat);
+            ssdSink.position.set(TX - 0.25, 0.55, -1.10);
+            const ssdLabel = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.14, 0.17), spLabelMat);
+            ssdLabel.position.set(TX - 0.25, 0.55, -1.10);
+            ssdGroup.add(ssdSink, ssdLabel);
+
+            registerComponentGroup("ssd", ssdGroup);
+
+            // 7. GPU: SAPPHIRE PULSE Radeon RX 7800 XT 16GB
+            const gpuGroup = new THREE.Group();
+            const pulseShroudMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.65, roughness: 0.35 });
+            const pulseBackplateMat = new THREE.MeshStandardMaterial({ color: 0x090d16, metalness: 0.8, roughness: 0.25 });
+            const sapphireRedMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.95 });
+
+            const gpuBody = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.52, 1.25), pulseShroudMat);
+            gpuBody.position.set(TX - 0.05, -0.18, -0.52);
+            gpuGroup.add(gpuBody);
+
+            const backplate = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.05, 1.26), pulseBackplateMat);
+            backplate.position.set(TX - 0.05, 0.10, -0.52);
+            gpuGroup.add(backplate);
+
+            const pulseLine = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.06, 0.06), sapphireRedMat);
+            pulseLine.position.set(TX - 0.05, -0.08, 0.11);
+            const pulseSpike = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.07), sapphireRedMat);
+            pulseSpike.position.set(TX - 0.35, -0.08, 0.11);
+            gpuGroup.add(pulseLine, pulseSpike);
+
+            [-0.62, 0.52].forEach((xPos) => {
+                const gFan = createFanUnit(0.46, 0.08, false);
+                gFan.rotation.x = Math.PI / 2;
+                gFan.position.set(TX + xPos, -0.45, -0.52);
+                gpuGroup.add(gFan);
+            });
+
+            registerComponentGroup("gpu", gpuGroup);
+
+            // 8. PSU: Thermaltake Toughpower GF A3 750W 80+ Gold
+            const psuGroup = new THREE.Group();
+            const psuShroudMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.65, roughness: 0.4 });
+            const goldBadgeMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.6 });
+
+            const shroud = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.25, 2.9), psuShroudMat);
+            shroud.position.set(TX - 0.05, -2.35, -0.02);
+            psuGroup.add(shroud);
+
+            const psuWindow = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.58, 0.06), heatsinkMat);
+            psuWindow.position.set(TX - 0.6, -2.35, 1.44);
+            psuGroup.add(psuWindow);
+
+            const psuGoldStripe = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.14, 0.08), goldBadgeMat);
+            psuGoldStripe.position.set(TX - 0.6, -2.35, 1.45);
+            psuGroup.add(psuGoldStripe);
+
+            registerComponentGroup("psu", psuGroup);
+
+            // 9. MAIN MONITOR (CENTER-RIGHT ON DESK): Acer Predator 27" WQHD OLED 280Hz (X27U)
+            const mainMonGroup = new THREE.Group();
+            const MX_MAIN = -1.65;
+            const MZ_MAIN = -0.55;
+            const bezelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.35, metalness: 0.5 });
+            const predatorRedMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.85 });
+
+            const mainPanel = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.65, 0.12), bezelMat);
+            mainPanel.position.set(MX_MAIN, -0.35, MZ_MAIN);
+            mainMonGroup.add(mainPanel);
+
+            const oledScreenMat = new THREE.MeshStandardMaterial({
+                color: 0x030712,
+                emissive: 0x0284c7,
+                emissiveIntensity: 0.72,
+                roughness: 0.08
+            });
+            const mainScreen = new THREE.Mesh(new THREE.BoxGeometry(4.36, 2.50, 0.03), oledScreenMat);
+            mainScreen.position.set(MX_MAIN, -0.35, MZ_MAIN + 0.07);
+            mainMonGroup.add(mainScreen);
+
+            const predAccent = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.08, 0.04), predatorRedMat);
+            predAccent.position.set(MX_MAIN, -1.63, MZ_MAIN + 0.07);
+            mainMonGroup.add(predAccent);
+
+            const mainNeck = new THREE.Mesh(new THREE.BoxGeometry(0.36, 1.75, 0.24), bezelMat);
+            mainNeck.position.set(MX_MAIN, -2.35, MZ_MAIN - 0.18);
+
+            const baseCenter = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.10, 0.55), bezelMat);
+            baseCenter.position.set(MX_MAIN, -3.22, MZ_MAIN - 0.05);
+
+            const legLeft = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.08, 0.18), bezelMat);
+            legLeft.position.set(MX_MAIN - 0.55, -3.23, MZ_MAIN + 0.22);
+            legLeft.rotation.y = 0.48;
+
+            const legRight = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.08, 0.18), bezelMat);
+            legRight.position.set(MX_MAIN + 0.55, -3.23, MZ_MAIN + 0.22);
+            legRight.rotation.y = -0.48;
+
+            mainMonGroup.add(mainNeck, baseCenter, legLeft, legRight);
+            registerComponentGroup("monitor_main", mainMonGroup);
+
+            // 10. SECONDARY MONITOR (SIDE-BY-SIDE LEFT ON DESK): Acer Nitro 27" 170Hz 2K
+            const secMonGroup = new THREE.Group();
+            const MX_SEC = -6.05;
+            const MZ_SEC = -0.10;
+            const SEC_ANGLE = 0.24;
+
+            const secPivot = new THREE.Group();
+            secPivot.position.set(MX_SEC, 0, MZ_SEC);
+            secPivot.rotation.y = SEC_ANGLE;
+
+            const secPanel = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.60, 0.14), bezelMat);
+            secPanel.position.set(0, -0.35, 0);
+            secPivot.add(secPanel);
+
+            const secScreenMat = new THREE.MeshStandardMaterial({
+                color: 0x0e7490,
+                emissive: 0x0369a1,
+                emissiveIntensity: 0.55,
+                roughness: 0.18
+            });
+            const secScreen = new THREE.Mesh(new THREE.BoxGeometry(4.24, 2.44, 0.03), secScreenMat);
+            secScreen.position.set(0, -0.35, 0.08);
+            secPivot.add(secScreen);
+
+            const secNeck = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.75, 0.22), bezelMat);
+            secNeck.position.set(0, -2.35, -0.16);
+            secPivot.add(secNeck);
+
+            const secBase = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.09, 0.95), bezelMat);
+            secBase.position.set(0, -3.22, 0.05);
+            secPivot.add(secBase);
+
+            const secRedTrim = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 0.12), predatorRedMat);
+            secRedTrim.position.set(0, -3.17, 0.35);
+            secPivot.add(secRedTrim);
+
+            secMonGroup.add(secPivot);
+            registerComponentGroup("monitor_sec", secMonGroup);
+
+            // 11. KEYBOARD & MOUSE: MSI Vigor GK30 Combo centered in front of the Dual Monitors
+            const periphGroup = new THREE.Group();
+            const deskMatPad = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+            const kbBodyMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.5 });
+
+            const deskPad = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.04, 2.2), deskMatPad);
+            deskPad.position.set(-2.3, -3.25, 1.35);
+            periphGroup.add(deskPad);
+
+            const kbBase = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.14, 0.98), kbBodyMat);
+            kbBase.position.set(-3.0, -3.16, 1.35);
+            kbBase.rotation.x = 0.08;
+            periphGroup.add(kbBase);
+
+            const kbRgbMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.9 });
+            rgbMaterials.push(kbRgbMat);
+            const kbGlowBed = new THREE.Mesh(new THREE.BoxGeometry(2.74, 0.06, 0.82), kbRgbMat);
+            kbGlowBed.position.set(-3.0, -3.09, 1.35);
+            kbGlowBed.rotation.x = 0.08;
+            periphGroup.add(kbGlowBed);
+
+            const keycaps = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.08, 0.76), kbBodyMat);
+            keycaps.position.set(-3.0, -3.05, 1.35);
+            keycaps.rotation.x = 0.08;
+            periphGroup.add(keycaps);
+
+            const mouseBody = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.22, 0.78), kbBodyMat);
+            mouseBody.position.set(-0.4, -3.14, 1.35);
+            const mouseRgbRim = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.80), kbRgbMat);
+            mouseRgbRim.position.set(-0.4, -3.21, 1.35);
+            periphGroup.add(mouseBody, mouseRgbRim);
+
+            registerComponentGroup("peripherals", periphGroup);
+
+            // Render any user-added custom 3D hardware stored in componentsData
+            Object.values(componentsData).forEach(comp => {
+                if (comp.isCustom) {
+                    buildCustomHardwareMesh(comp);
+                }
+                applyComponentTransform(comp.id);
+            });
+        }
+
+        // Builds a 3D procedural mesh for user-added hardware upgrades and registers it in the 3D scene
+        function buildCustomHardwareMesh(comp) {
+            if (componentGroups[comp.id]) {
+                pcGroup.remove(componentGroups[comp.id]);
+                interactiveMeshes = interactiveMeshes.filter(m => m.userData.componentId !== comp.id);
+                delete componentGroups[comp.id];
+            }
+
+            const TX = 2.2;
+            const group = new THREE.Group();
+            const hexColor = comp.customColor ? parseInt(comp.customColor.replace("#", "0x")) : 0x06b6d4;
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 });
+            const accentMat = new THREE.MeshStandardMaterial({ color: hexColor, emissive: hexColor, emissiveIntensity: 0.65, roughness: 0.25 });
+
+            const tpl = comp.templateType || "custom_box";
+
+            if (tpl === "nvme_slot2") {
+                const sink = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.32, 0.16), bodyMat);
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.12, 0.18), accentMat);
+                group.add(sink, stripe);
+                group.position.set(TX - 0.25, -0.42, -1.10);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(TX - 0.25, -0.42, -1.10), radius: 5.8, theta: 0.42, phi: 1.38 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(-0.3, -0.2, 1.4);
+            } else if (tpl === "ram_extra") {
+                [0.36, 0.60].forEach(xOff => {
+                    const stick = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.08, 0.28), bodyMat);
+                    stick.position.set(xOff, 0, 0);
+                    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.065, 1.08, 0.05), accentMat);
+                    bar.position.set(xOff, 0, 0.14);
+                    group.add(stick, bar);
+                });
+                group.position.set(TX, 1.45, -1.04);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(TX + 0.5, 1.45, -0.8), radius: 5.8, theta: 0.35, phi: 1.35 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0.9, 0.5, 1.6);
+            } else if (tpl === "top_fan") {
+                [-0.55, 0.65].forEach(xOff => {
+                    const fan = createFanUnit(0.54, 0.16, false);
+                    fan.rotation.x = Math.PI / 2;
+                    fan.position.set(xOff, 0, 0);
+                    group.add(fan);
+                });
+                group.position.set(TX - 0.1, 2.88, -0.2);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(TX, 2.8, -0.2), radius: 6.8, theta: 0.48, phi: 1.25 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, 1.2, 0);
+            } else if (tpl === "pcie_addon") {
+                const card = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.12, 0.85), bodyMat);
+                const led = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.05, 0.06), accentMat);
+                led.position.set(0, 0, 0.43);
+                group.add(card, led);
+                group.position.set(TX - 0.2, -0.85, -0.75);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(TX - 0.2, -0.85, -0.75), radius: 6.4, theta: 0.48, phi: 1.42 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, -0.3, 1.8);
+            } else if (tpl === "sata_ssd") {
+                const drive = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.68, 0.12), bodyMat);
+                const badge = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.35, 0.14), accentMat);
+                group.add(drive, badge);
+                group.position.set(TX + 0.85, -1.55, 1.44);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(TX + 0.85, -1.55, 1.44), radius: 6.5, theta: 0.45, phi: 1.40 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0.4, 0, 1.1);
+            } else if (tpl === "desk_mouse") {
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.28, 0.86), bodyMat);
+                const thumbRest = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.65), bodyMat);
+                thumbRest.position.set(-0.30, -0.08, 0.05);
+                const scrollWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.08, 16), accentMat);
+                scrollWheel.rotation.z = Math.PI / 2;
+                scrollWheel.position.set(0, 0.14, -0.22);
+                group.add(body, thumbRest, scrollWheel);
+                group.position.set(0.35, -3.12, 1.35);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(0.35, -3.12, 1.35), radius: 5.5, theta: 0.15, phi: 1.15 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, 0.3, 0.5);
+            } else if (tpl === "speakers") {
+                [-3.95, 0.75].forEach(xPos => {
+                    const spk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.05, 0.62), bodyMat);
+                    spk.position.set(xPos, 0, 0);
+                    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 20), accentMat);
+                    cone.rotation.x = Math.PI / 2;
+                    cone.position.set(xPos, 0.1, 0.31);
+                    group.add(spk, cone);
+                });
+                group.position.set(0, -2.72, -0.35);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(-1.6, -2.5, -0.35), radius: 8.5, theta: 0.12, phi: 1.32 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, 0.4, 0.5);
+            } else if (tpl === "webcam") {
+                const camBody = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.26, 0.28), bodyMat);
+                const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.08, 20), accentMat);
+                lens.rotation.x = Math.PI / 2;
+                lens.position.set(0, 0, 0.15);
+                group.add(camBody, lens);
+                group.position.set(-1.65, 1.12, -0.50);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(-1.65, 1.12, -0.50), radius: 5.5, theta: 0.08, phi: 1.30 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, 0.45, 0.4);
+            } else {
+                const modBox = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.55, 0.95), bodyMat);
+                const modTrim = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.12, 0.98), accentMat);
+                group.add(modBox, modTrim);
+                group.position.set(-0.5, -2.85, 0.5);
+                COMPONENT_CAMERA_TARGETS[comp.id] = { lookAt: new THREE.Vector3(-0.5, -2.85, 0.5), radius: 6.5, theta: 0.25, phi: 1.25 };
+                EXPLODE_OFFSETS[comp.id] = new THREE.Vector3(0, 0.5, 0.5);
+            }
+
+            registerComponentGroup(comp.id, group);
+        }
+
+        // Applies user-customized 3D offsets, rotation, scale, visibility, and color tint to any component
+        function applyComponentTransform(compId) {
+            const group = componentGroups[compId];
+            const comp = componentsData[compId];
+            if (!group || !comp) return;
+
+            const t = comp.transform || { x: 0, y: 0, z: 0, rotY: 0, scale: 1, visible: true, useCustomColor: false };
+            group.visible = t.visible !== false;
+            group.rotation.y = (parseFloat(t.rotY) || 0) * (Math.PI / 180);
+            const s = parseFloat(t.scale) || 1;
+            group.scale.set(s, s, s);
+
+            if (t.useCustomColor && comp.customColor) {
+                const hex = parseInt(comp.customColor.replace("#", "0x"));
+                group.traverse(child => {
+                    if (child.isMesh && child.material && !rgbMaterials.includes(child.material)) {
+                        child.material.color.setHex(hex);
+                    }
+                });
+            }
+        }
+
+        function update3DHighlights() {
+            Object.entries(componentGroups).forEach(([id, group]) => {
+                const compData = componentsData[id];
+                const isSelected = (id === selectedComponentId);
+                const isHovered = (id === hoveredComponentId);
+
+                group.traverse((child) => {
+                    if (child.isMesh && child.material && child.material.emissive) {
+                        if (rgbMaterials.includes(child.material) && !isSelected && !isHovered) {
+                            return;
+                        }
+                        if (isSelected) {
+                            child.material.emissive.setHex(0x06b6d4);
+                            child.material.emissiveIntensity = 0.45;
+                        } else if (isHovered) {
+                            child.material.emissive.setHex(0x38bdf8);
+                            child.material.emissiveIntensity = 0.28;
+                        } else if (compData && compData.status === "Critical") {
+                            child.material.emissive.setHex(0xf43f5e);
+                            child.material.emissiveIntensity = 0.32;
+                        } else if (compData && compData.status === "Warning") {
+                            child.material.emissive.setHex(0xf59e0b);
+                            child.material.emissiveIntensity = 0.22;
+                        } else if (child.userData.origEmissive) {
+                            child.material.emissive.copy(child.userData.origEmissive);
+                            child.material.emissiveIntensity = child.userData.origEmissiveIntensity;
+                        }
+                    }
+                });
+            });
+        }
+
+        function setupViewportInteractions(domElement) {
+            let isDragging = false;
+            let pointerDownPos = { x: 0, y: 0 };
+            let prevPos = { x: 0, y: 0 };
+
+            domElement.addEventListener("mousedown", (e) => {
+                isDragging = true;
+                isAutoRotating = false;
+                pointerDownPos = { x: e.clientX, y: e.clientY };
+                prevPos = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener("mousemove", (e) => {
+                if (isDragging) {
+                    const dx = e.clientX - prevPos.x;
+                    const dy = e.clientY - prevPos.y;
+                    targetSpherical.theta -= dx * 0.007;
+                    targetSpherical.phi = Math.max(0.35, Math.min(Math.PI - 0.35, targetSpherical.phi - dy * 0.007));
+                    prevPos = { x: e.clientX, y: e.clientY };
+                    document.getElementById("hover-tooltip").classList.add("hidden");
+                }
+            });
+
+            domElement.addEventListener("mousemove", (e) => {
+                if (!isDragging) handleViewportHover(e);
+            });
+
+            window.addEventListener("mouseup", (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (moveDist < 6 && e.target === domElement) {
+                    handleViewportClick(e);
+                }
+            });
+
+            domElement.addEventListener("wheel", (e) => {
+                e.preventDefault();
+                targetSpherical.radius = Math.max(5.0, Math.min(26, targetSpherical.radius + e.deltaY * 0.01));
+            }, { passive: false });
+
+            domElement.addEventListener("touchstart", (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    isAutoRotating = false;
+                    pointerDownPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    prevPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }, { passive: true });
+
+            domElement.addEventListener("touchmove", (e) => {
+                if (isDragging && e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - prevPos.x;
+                    const dy = e.touches[0].clientY - prevPos.y;
+                    targetSpherical.theta -= dx * 0.007;
+                    targetSpherical.phi = Math.max(0.35, Math.min(Math.PI - 0.35, targetSpherical.phi - dy * 0.007));
+                    prevPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }, { passive: true });
+
+            domElement.addEventListener("touchend", () => { isDragging = false; });
+        }
+
+        function getIntersectedComponent(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(interactiveMeshes, false);
+            if (intersects.length === 0) return null;
+
+            const nonCaseHit = intersects.find(hit => hit.object.userData.componentId !== "case");
+            return nonCaseHit ? nonCaseHit.object.userData.componentId : intersects[0].object.userData.componentId;
+        }
+
+        function handleViewportHover(event) {
+            const hitId = getIntersectedComponent(event);
+            const tooltip = document.getElementById("hover-tooltip");
+
+            if (hitId && componentsData[hitId]) {
+                renderer.domElement.style.cursor = "pointer";
+                if (hoveredComponentId !== hitId) {
+                    hoveredComponentId = hitId;
+                    update3DHighlights();
+                }
+                const comp = componentsData[hitId];
+                const stats = getComponentInflationStats(comp);
+                document.getElementById("tooltip-name").textContent = comp.category;
+                document.getElementById("tooltip-cost").textContent = `Paid: $${stats.paid.toFixed(2)} → Now: $${stats.current.toFixed(2)} (${stats.formattedPct})`;
+                document.getElementById("tooltip-model").textContent = comp.model;
+                document.getElementById("tooltip-temp").textContent = `${comp.clock} • ${comp.status}`;
+                tooltip.style.left = `${event.clientX}px`;
+                tooltip.style.top = `${event.clientY}px`;
+                tooltip.classList.remove("hidden");
+            } else {
+                renderer.domElement.style.cursor = "grab";
+                if (hoveredComponentId !== null) {
+                    hoveredComponentId = null;
+                    update3DHighlights();
+                }
+                tooltip.classList.add("hidden");
+            }
+        }
+
+        function handleViewportClick(event) {
+            const hitId = getIntersectedComponent(event);
+            if (hitId && componentsData[hitId]) {
+                selectComponent(hitId, true);
+            }
+        }
+
+        function focusCameraOnComponent(id) {
+            const preset = COMPONENT_CAMERA_TARGETS[id] || COMPONENT_CAMERA_TARGETS.all;
+            targetLookAt.copy(preset.lookAt);
+            targetSpherical.radius = preset.radius;
+            targetSpherical.theta = preset.theta;
+            targetSpherical.phi = preset.phi;
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById("canvas-container");
+            if (!container || !renderer || !camera) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now() * 0.001;
+
+            fanBlades.forEach((rotor) => { rotor.rotation.z -= 0.16; });
+
+            if (isRgbCycling) {
+                rgbMaterials.forEach((mat, idx) => {
+                    const hue = (time * 0.12 + idx * 0.15) % 1;
+                    mat.color.setHSL(hue, 0.85, 0.55);
+                    mat.emissive.setHSL(hue, 0.9, 0.45);
+                });
+            }
+
+            if (glassDoorGroup) {
+                const targetRotY = isSidePanelOpen ? -Math.PI * 0.58 : 0;
+                glassDoorGroup.rotation.y += (targetRotY - glassDoorGroup.rotation.y) * 0.1;
+            }
+
+            Object.entries(componentGroups).forEach(([id, group]) => {
+                const base = group.userData.basePosition;
+                const offset = isExplodedView ? (EXPLODE_OFFSETS[id] || new THREE.Vector3()) : new THREE.Vector3();
+                const userT = componentsData[id]?.transform || { x: 0, y: 0, z: 0 };
+                const targetX = base.x + offset.x + (parseFloat(userT.x) || 0);
+                const targetY = base.y + offset.y + (parseFloat(userT.y) || 0);
+                const targetZ = base.z + offset.z + (parseFloat(userT.z) || 0);
+                group.position.x += (targetX - group.position.x) * 0.09;
+                group.position.y += (targetY - group.position.y) * 0.09;
+                group.position.z += (targetZ - group.position.z) * 0.09;
+            });
+
+            if (isAutoRotating) targetSpherical.theta += 0.0045;
+
+            camSpherical.radius += (targetSpherical.radius - camSpherical.radius) * 0.08;
+            camSpherical.theta += (targetSpherical.theta - camSpherical.theta) * 0.08;
+            camSpherical.phi += (targetSpherical.phi - camSpherical.phi) * 0.08;
+            camLookAt.lerp(targetLookAt, 0.08);
+
+            camera.position.x = camLookAt.x + camSpherical.radius * Math.sin(camSpherical.phi) * Math.sin(camSpherical.theta);
+            camera.position.y = camLookAt.y + camSpherical.radius * Math.cos(camSpherical.phi);
+            camera.position.z = camLookAt.z + camSpherical.radius * Math.sin(camSpherical.phi) * Math.cos(camSpherical.theta);
+            camera.lookAt(camLookAt);
+
+            renderer.render(scene, camera);
+        }
+
+        // ============================================================================
+        // 4. UI RENDERING, MASTER DOCUMENT & 2024 VS 2026 INFLATION TABLE
+        // ============================================================================
+        function selectComponent(id, shouldFocusCamera = false) {
+            selectedComponentId = id;
+            const comp = componentsData[id];
+            if (!comp) return;
+
+            const stats = getComponentInflationStats(comp);
+            document.getElementById("viewport-selected-label").textContent = `${comp.category} — Paid $${stats.paid.toFixed(2)} (Now $${stats.current.toFixed(2)})`;
+
+            renderComponentSidebar();
+            renderYoYInflationTable();
+
+            document.getElementById("spec-category-title").textContent = comp.category;
+            document.getElementById("spec-model-title").textContent = comp.model;
+            document.getElementById("spec-icon-box").innerHTML = `<i class="fa-solid ${comp.icon}"></i>`;
+            document.getElementById("spec-price-pill").textContent = `$${stats.paid.toFixed(2)}`;
+            document.getElementById("spec-market-pill").textContent = `$${stats.current.toFixed(2)}`;
+
+            const deltaPill = document.getElementById("spec-delta-pill");
+            deltaPill.textContent = `${stats.formattedDiff} (${stats.formattedPct})`;
+            deltaPill.className = stats.diff > 0
+                ? "px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                : "px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+
+            const pill = document.getElementById("spec-status-pill");
+            pill.textContent = comp.status;
+            pill.className = "text-[10px] px-2 py-0.5 rounded-full font-medium border " + getStatusBadgeClasses(comp.status);
+
+            document.getElementById("input-model").value = comp.model || "";
+            document.getElementById("input-actual-cost").value = stats.paid;
+            document.getElementById("input-current-price").value = stats.current;
+            document.getElementById("input-projected-cost").value = comp.projectedCost || "N/A";
+            document.getElementById("input-clock").value = comp.clock || "";
+            document.getElementById("input-temp").value = comp.temp || "";
+            document.getElementById("input-status").value = comp.status || "Optimal";
+            document.getElementById("input-driver").value = comp.driver || "";
+            document.getElementById("input-notes").value = comp.notes || "";
+
+            // Populate 3D Spatial & Appearance Studio controls
+            const t = comp.transform || { x: 0, y: 0, z: 0, rotY: 0, scale: 1, visible: true, useCustomColor: false };
+            document.getElementById("slider-pos-x").value = t.x || 0;
+            document.getElementById("slider-pos-y").value = t.y || 0;
+            document.getElementById("slider-pos-z").value = t.z || 0;
+            document.getElementById("slider-rot-y").value = t.rotY || 0;
+            document.getElementById("slider-scale").value = t.scale || 1;
+            document.getElementById("val-pos-x").textContent = Number(t.x || 0).toFixed(2);
+            document.getElementById("val-pos-y").textContent = Number(t.y || 0).toFixed(2);
+            document.getElementById("val-pos-z").textContent = Number(t.z || 0).toFixed(2);
+            document.getElementById("val-rot-y").textContent = `${t.rotY || 0}°`;
+            document.getElementById("val-scale").textContent = `${Number(t.scale || 1).toFixed(2)}x`;
+            document.getElementById("check-part-visible").checked = t.visible !== false;
+            document.getElementById("check-custom-color").checked = !!t.useCustomColor;
+            document.getElementById("picker-custom-color").value = comp.customColor || "#06b6d4";
+
+            const delBtn = document.getElementById("delete-custom-part-btn");
+            if (delBtn) {
+                delBtn.classList.toggle("hidden", !comp.isCustom);
+            }
+
+            renderComponentLogsPreview(id);
+            update3DHighlights();
+            if (shouldFocusCamera) focusCameraOnComponent(id);
+        }
+
+        function getStatusBadgeClasses(status) {
+            if (status === "Critical") return "bg-rose-500/20 text-rose-300 border-rose-500/40";
+            if (status === "Warning") return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+            return "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+        }
+
+        function getStatusDotColor(status) {
+            if (status === "Critical") return "bg-rose-500";
+            if (status === "Warning") return "bg-amber-400";
+            return "bg-emerald-400";
+        }
+
+        function calculateBuildTotals() {
+            const partsPaid = Object.values(componentsData).reduce((sum, c) => sum + (parseFloat(c.actualCost) || 0), 0);
+            const partsCurrent = Object.values(componentsData).reduce((sum, c) => sum + (parseFloat(c.currentMarketPrice) || parseFloat(c.actualCost) || 0), 0);
+            const extrasPaid = EXTRA_BUDGET_ITEMS.reduce((sum, item) => sum + item.actual, 0);
+            const extrasCurrent = EXTRA_BUDGET_ITEMS.reduce((sum, item) => sum + (item.currentPrice !== undefined ? item.currentPrice : item.actual), 0);
+            return {
+                partsPaid,
+                partsCurrent,
+                extrasPaid,
+                extrasCurrent,
+                totalPaidAll: partsPaid + extrasPaid,
+                totalCurrentAll: partsCurrent + extrasCurrent
+            };
+        }
+
+        function updatePowerConsumptionCalculator() {
+            const idlePower = 62;
+            const browserPower = 115;
+            const heavyPower = 425;
+
+            const idleEl = document.getElementById("calc-idle");
+            const browserEl = document.getElementById("calc-browser");
+            const heavyEl = document.getElementById("calc-heavy");
+            const hudIdle = document.getElementById("hud-power-idle");
+            const hudBrowser = document.getElementById("hud-power-browser");
+            const hudGaming = document.getElementById("hud-power-gaming");
+            const headroomEl = document.getElementById("psu-headroom");
+
+            if (idleEl) idleEl.textContent = `${idlePower} W`;
+            if (browserEl) browserEl.textContent = `${browserPower} W`;
+            if (heavyEl) heavyEl.textContent = `${heavyPower} W`;
+            if (hudIdle) hudIdle.textContent = `${idlePower}W`;
+            if (hudBrowser) hudBrowser.textContent = `${browserPower}W`;
+            if (hudGaming) hudGaming.textContent = `${heavyPower}W`;
+
+            if (headroomEl) {
+                const psuCapacity = 750;
+                const headroom = psuCapacity - heavyPower;
+                headroomEl.textContent = `${headroom}W (${Math.round((heavyPower/psuCapacity)*100)}% load)`;
+            }
+        }
+
+        function renderYoYInflationTable() {
+            const tableEl = document.getElementById("yoy-inflation-table");
+            if (!tableEl) return;
+            tableEl.innerHTML = "";
+
+            const totals = calculateBuildTotals();
+            const partsDiff = totals.partsCurrent - totals.partsPaid;
+            const partsPct = totals.partsPaid > 0 ? (partsDiff / totals.partsPaid) * 100 : 0;
+
+            const hudCost = document.getElementById("hud-total-cost");
+            const hudMarket = document.getElementById("hud-market-cost");
+            if (hudCost) hudCost.textContent = `$${totals.totalPaidAll.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (hudMarket) hudMarket.textContent = `$${totals.totalCurrentAll.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            const docPaidParts = document.getElementById("doc-paid-parts");
+            const docPaidAll = document.getElementById("doc-paid-all");
+            const docCurrentParts = document.getElementById("doc-current-parts");
+            const docInflationDiff = document.getElementById("doc-inflation-diff");
+            const docInflationPct = document.getElementById("doc-inflation-pct");
+
+            if (docPaidParts) docPaidParts.textContent = `$${totals.partsPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (docPaidAll) docPaidAll.textContent = `$${totals.totalPaidAll.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} w/ tax & games`;
+            if (docCurrentParts) docCurrentParts.textContent = `$${totals.partsCurrent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (docInflationDiff) docInflationDiff.textContent = `${partsDiff >= 0 ? '+' : '-'}$${Math.abs(partsDiff).toFixed(2)}`;
+            if (docInflationPct) docInflationPct.textContent = `${partsDiff >= 0 ? '+' : '-'}${Math.abs(partsPct).toFixed(1)}% Since 2024`;
+
+            updatePowerConsumptionCalculator();
+
+            Object.values(componentsData).forEach(comp => {
+                const stats = getComponentInflationStats(comp);
+                const isHighSurge = stats.pct >= 25;
+                const row = document.createElement("div");
+                row.className = `p-3 rounded-xl border transition cursor-pointer space-y-2 text-xs ${
+                    comp.id === selectedComponentId
+                        ? 'bg-cyan-950/30 border-cyan-500/50'
+                        : isHighSurge
+                            ? 'bg-slate-900/80 border-amber-500/35 hover:border-amber-400/60'
+                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-start space-x-2.5 min-w-0">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
+                                <i class="fa-solid ${comp.icon}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-[10px] font-mono uppercase text-cyan-400 font-semibold">${comp.category}</span>
+                                    ${isHighSurge ? `<span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-mono uppercase"><i class="fa-solid fa-fire mr-1"></i>Major Surge</span>` : ''}
+                                </div>
+                                <div class="font-semibold text-white leading-snug mt-0.5">${comp.model}</div>
+                                <div class="text-[10px] text-slate-400 mt-0.5">${comp.marketFactor || '2024 vs 2026 Market Adjustment'}</div>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="inline-block px-2 py-0.5 rounded font-mono font-bold text-[11px] ${stats.diff >= 0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+                                ${stats.formattedDiff} (${stats.formattedPct})
+                            </span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 pt-1.5 border-t border-slate-800/80 text-[11px] font-mono">
+                        <div>
+                            <span class="text-slate-500 text-[10px] block">2024 YOU PAID</span>
+                            <span class="text-emerald-400 font-bold">$${stats.paid.toFixed(2)}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 text-[10px] block">2026 MARKET PRICE</span>
+                            <span class="text-rose-300 font-bold">$${stats.current.toFixed(2)}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-500 text-[10px] block">PRICE INCREASE</span>
+                            <span class="text-amber-300 font-bold">${stats.formattedDiff}</span>
+                        </div>
+                    </div>
+                `;
+                row.addEventListener("click", () => selectComponent(comp.id, true));
+                tableEl.appendChild(row);
+            });
+
+            EXTRA_BUDGET_ITEMS.forEach(item => {
+                const row = document.createElement("div");
+                row.className = "p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 flex items-center justify-between gap-3 text-xs";
+                row.innerHTML = `
+                    <div class="flex items-center space-x-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-amber-400 shrink-0">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-semibold text-slate-200 truncate">${item.name}</div>
+                            <div class="text-[10px] text-slate-400 truncate">${item.detail}</div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <div class="mono font-bold text-emerald-400">Paid: $${Number(item.actual || 0).toFixed(2)}</div>
+                        <div class="text-[10px] font-mono text-slate-400">2026 Est: $${Number(item.currentPrice || 0).toFixed(2)}</div>
+                    </div>
+                `;
+                tableEl.appendChild(row);
+            });
+        }
+
+        function renderComponentSidebar() {
+            const listEl = document.getElementById("component-list");
+            if (!listEl) return;
+            listEl.innerHTML = "";
+
+            const allComps = Object.values(componentsData);
+            const countEl = document.getElementById("sidebar-part-count");
+            if (countEl) countEl.textContent = `Components (${allComps.length})`;
+
+            allComps.forEach(comp => {
+                const isActive = (comp.id === selectedComponentId);
+                const openIssuesForComp = logsData.filter(l => l.componentId === comp.id && !l.resolved).length;
+                const stats = getComponentInflationStats(comp);
+
+                const card = document.createElement("div");
+                card.className = `component-card cursor-pointer p-2.5 rounded-xl border ${isActive ? 'active border-cyan-500/40' : 'border-slate-800/70 bg-slate-900/40 hover:bg-slate-900/80'}`;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2.5 min-w-0">
+                            <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-400 shrink-0">
+                                <i class="fa-solid ${comp.icon} text-xs"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
+                                    <span class="truncate">${comp.category}</span>
+                                    ${openIssuesForComp > 0 ? `<span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[9px] mono shrink-0">${openIssuesForComp} open</span>` : ''}
+                                </div>
+                                <div class="text-xs font-semibold text-slate-100 truncate">${comp.model}</div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end shrink-0 ml-2">
+                            <div class="flex items-center gap-1 mb-0.5">
+                                <span class="text-[10px] mono font-semibold text-emerald-400">$${stats.paid.toFixed(2)}</span>
+                                <span class="w-2 h-2 rounded-full ${getStatusDotColor(comp.status)}"></span>
+                            </div>
+                            <span class="text-[9px] mono text-rose-400" title="Current 2026 Market Price">Now $${stats.current.toFixed(0)} (${stats.formattedPct})</span>
+                        </div>
+                    </div>
+                `;
+                card.addEventListener("click", () => selectComponent(comp.id, true));
+                card.addEventListener("mouseenter", () => {
+                    hoveredComponentId = comp.id;
+                    update3DHighlights();
+                });
+                card.addEventListener("mouseleave", () => {
+                    hoveredComponentId = null;
+                    update3DHighlights();
+                });
+                listEl.appendChild(card);
+            });
+
+            updateGlobalHealthMetrics();
+        }
+
+        function updateGlobalHealthMetrics() {
+            const statuses = Object.values(componentsData).map(c => c.status);
+            const dot = document.getElementById("global-health-dot");
+            const txt = document.getElementById("global-health-text");
+
+            if (dot && txt) {
+                if (statuses.includes("Critical")) {
+                    dot.className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
+                    txt.textContent = "Critical Alert";
+                    txt.className = "font-semibold text-rose-400";
+                } else if (statuses.includes("Warning")) {
+                    dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+                    txt.textContent = "Needs Attention";
+                    txt.className = "font-semibold text-amber-400";
+                } else {
+                    dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+                    txt.textContent = "Optimal";
+                    txt.className = "font-semibold text-emerald-400";
+                }
+            }
+
+            const openCount = logsData.filter(l => !l.resolved).length;
+            const openIssuesEl = document.getElementById("open-issues-count");
+            if (openIssuesEl) openIssuesEl.textContent = openCount;
+
+            const totalLogsEl = document.getElementById("total-logs-count");
+            if (totalLogsEl) totalLogsEl.textContent = logsData.length;
+
+            const badgeEl = document.getElementById("tab-log-badge");
+            if (badgeEl) badgeEl.textContent = logsData.length;
+        }
+
+        function renderComponentLogsPreview(componentId) {
+            const container = document.getElementById("component-logs-preview");
+            const matching = logsData.filter(l => l.componentId === componentId);
+            document.getElementById("component-log-count").textContent = `${matching.length} ${matching.length === 1 ? 'entry' : 'entries'}`;
+
+            if (matching.length === 0) {
+                container.innerHTML = `
+                    <div class="p-3 rounded-lg bg-slate-900/40 border border-slate-800/70 text-[11px] text-slate-500 text-center">
+                        No updates or issues logged for this component yet.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = "";
+            matching.slice(0, 3).forEach(log => {
+                const dateStr = new Date(log.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const item = document.createElement("div");
+                item.className = "p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 text-xs space-y-1";
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-slate-200 truncate">${log.title}</span>
+                        <span class="text-[10px] mono ${log.resolved ? 'text-emerald-400' : 'text-amber-400'}">${log.resolved ? 'Resolved' : 'Open'}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 line-clamp-2">${log.description}</p>
+                    <div class="text-[10px] text-slate-500 flex items-center justify-between pt-0.5">
+                        <span>${log.category}</span>
+                        <span class="mono">${dateStr}</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderFullLogsList() {
+            const container = document.getElementById("logs-list-container");
+            const compFilter = document.getElementById("filter-component").value;
+            const typeFilter = document.getElementById("filter-type").value;
+            const statusFilter = document.getElementById("filter-status").value;
+
+            const filtered = logsData.filter(log => {
+                if (compFilter !== "all" && log.componentId !== compFilter) return false;
+                if (typeFilter !== "all" && log.category !== typeFilter) return false;
+                if (statusFilter === "unresolved" && log.resolved) return false;
+                if (statusFilter === "resolved" && !log.resolved) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-6 rounded-xl bg-slate-900/40 border border-slate-800/80 text-center space-y-2 mt-2">
+                        <i class="fa-solid fa-clipboard-check text-2xl text-slate-600"></i>
+                        <p class="text-xs text-slate-400">No matching update or diagnostic logs found.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = "";
+            filtered.forEach(log => {
+                const compTitle = log.componentId === "system" 
+                    ? "Whole System / OS" 
+                    : (componentsData[log.componentId]?.category || log.componentId.toUpperCase());
+                const dateStr = new Date(log.timestamp).toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                let sevBadge = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                if (log.severity === "Critical") sevBadge = "bg-rose-500/20 text-rose-300 border-rose-500/40";
+                else if (log.severity === "Warning") sevBadge = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+
+                const card = document.createElement("div");
+                card.className = `p-3 rounded-xl border transition space-y-2 ${log.resolved ? 'bg-slate-900/40 border-slate-800/70' : 'bg-slate-900/90 border-amber-500/40'}`;
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span class="text-[10px] px-1.5 py-0.5 rounded border font-medium ${sevBadge}">${log.severity}</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">${log.category}</span>
+                                <span class="text-[10px] mono text-cyan-400">${compTitle}</span>
+                            </div>
+                            <h4 class="text-xs font-bold text-white">${log.title}</h4>
+                        </div>
+                        <button data-action="delete" class="text-slate-500 hover:text-rose-400 text-xs px-1" title="Delete Entry">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line">${log.description}</p>
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px] text-slate-400">
+                        <span class="mono">${dateStr}</span>
+                        <button data-action="toggle-resolve" class="px-2 py-0.5 rounded font-medium border transition ${log.resolved ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-slate-800' : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-emerald-500/20 hover:text-emerald-300'}">
+                            <i class="fa-solid ${log.resolved ? 'fa-check' : 'fa-clock'} mr-1"></i>
+                            ${log.resolved ? 'Resolved' : 'Mark Resolved'}
+                        </button>
+                    </div>
+                `;
+
+                card.querySelector('[data-action="toggle-resolve"]').addEventListener("click", () => {
+                    log.resolved = !log.resolved;
+                    saveLogsToStorage();
+                    renderComponentSidebar();
+                    renderComponentLogsPreview(selectedComponentId);
+                    renderFullLogsList();
+                    showToast(log.resolved ? "Marked as resolved" : "Re-opened issue");
+                });
+
+                card.querySelector('[data-action="delete"]').addEventListener("click", () => {
+                    logsData = logsData.filter(l => l.id !== log.id);
+                    saveLogsToStorage();
+                    renderComponentSidebar();
+                    renderComponentLogsPreview(selectedComponentId);
+                    renderFullLogsList();
+                    showToast("Log entry deleted");
+                });
+
+                container.appendChild(card);
+            });
+        }
+
+        // ============================================================================
+        // 5. EVENT LISTENERS & UI BINDINGS
+        // ============================================================================
+        function setupUIEventListeners() {
+            document.getElementById("spec-form").addEventListener("submit", (e) => {
+                e.preventDefault();
+                const comp = componentsData[selectedComponentId];
+                if (!comp) return;
+
+                comp.model = document.getElementById("input-model").value.trim();
+                comp.actualCost = parseFloat(document.getElementById("input-actual-cost").value) || 0;
+                comp.currentMarketPrice = parseFloat(document.getElementById("input-current-price").value) || comp.actualCost;
+                comp.projectedCost = document.getElementById("input-projected-cost").value.trim();
+                comp.clock = document.getElementById("input-clock").value.trim();
+                comp.temp = document.getElementById("input-temp").value.trim();
+                comp.status = document.getElementById("input-status").value;
+                comp.driver = document.getElementById("input-driver").value.trim();
+                comp.notes = document.getElementById("input-notes").value.trim();
+
+                selectComponent(selectedComponentId, false);
+                saveRigSpecsToStorage(true);
+            });
+
+            const tabSpecsBtn = document.getElementById("tab-specs-btn");
+            const tabDocumentBtn = document.getElementById("tab-document-btn");
+            const tabLogsBtn = document.getElementById("tab-logs-btn");
+            const panelSpecs = document.getElementById("panel-specs");
+            const panelDocument = document.getElementById("panel-document");
+            const panelLogs = document.getElementById("panel-logs");
+
+            const activeTabClass = "flex-1 py-3 text-xs font-semibold border-b-2 border-cyan-400 text-cyan-400 flex items-center justify-center gap-1.5 transition";
+            const inactiveTabClass = "flex-1 py-3 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition";
+
+            tabSpecsBtn.addEventListener("click", () => {
+                tabSpecsBtn.className = activeTabClass;
+                tabDocumentBtn.className = inactiveTabClass;
+                tabLogsBtn.className = inactiveTabClass;
+                panelSpecs.classList.remove("hidden");
+                panelDocument.classList.add("hidden");
+                panelLogs.classList.add("hidden");
+            });
+
+            tabDocumentBtn.addEventListener("click", () => {
+                tabDocumentBtn.className = activeTabClass;
+                tabSpecsBtn.className = inactiveTabClass;
+                tabLogsBtn.className = inactiveTabClass;
+                panelDocument.classList.remove("hidden");
+                panelSpecs.classList.add("hidden");
+                panelLogs.classList.add("hidden");
+                renderYoYInflationTable();
+            });
+
+            tabLogsBtn.addEventListener("click", () => {
+                tabLogsBtn.className = activeTabClass;
+                tabSpecsBtn.className = inactiveTabClass;
+                tabDocumentBtn.className = inactiveTabClass;
+                panelLogs.classList.remove("hidden");
+                panelSpecs.classList.add("hidden");
+                panelDocument.classList.add("hidden");
+                renderFullLogsList();
+            });
+
+            // Camera Preset Buttons
+            document.getElementById("cam-reset-btn").addEventListener("click", () => {
+                focusCameraOnComponent("all");
+                document.getElementById("viewport-selected-label").textContent = "Side-by-Side Dual Monitors & Rig";
+            });
+
+            document.getElementById("cam-monitors-btn").addEventListener("click", () => {
+                focusCameraOnComponent("monitors");
+                document.getElementById("viewport-selected-label").textContent = "Side-by-Side Dual Monitors (OLED Main + 170Hz Sec)";
+            });
+
+            document.getElementById("cam-tower-btn").addEventListener("click", () => {
+                focusCameraOnComponent("tower");
+                document.getElementById("viewport-selected-label").textContent = "Phanteks XT Pro Ultra Tower";
+            });
+
+            document.getElementById("show-all-btn").addEventListener("click", () => {
+                focusCameraOnComponent("all");
+                document.getElementById("viewport-selected-label").textContent = "Side-by-Side Dual Monitors & Rig";
+            });
+
+            document.getElementById("show-monitors-btn").addEventListener("click", () => {
+                focusCameraOnComponent("monitors");
+                document.getElementById("viewport-selected-label").textContent = "Side-by-Side Dual Monitors (OLED Main + 170Hz Sec)";
+            });
+
+            document.getElementById("show-tower-btn").addEventListener("click", () => {
+                focusCameraOnComponent("tower");
+                document.getElementById("viewport-selected-label").textContent = "Phanteks XT Pro Ultra Tower";
+            });
+
+            document.getElementById("focus-3d-btn").addEventListener("click", () => {
+                focusCameraOnComponent(selectedComponentId);
+            });
+
+            // 3D Viewport Action Toggles
+            document.getElementById("toggle-sidepanel-btn").addEventListener("click", () => {
+                isSidePanelOpen = !isSidePanelOpen;
+                document.getElementById("sidepanel-btn-text").textContent = isSidePanelOpen ? "Close Glass" : "Open Glass";
+            });
+
+            document.getElementById("toggle-explode-btn").addEventListener("click", (e) => {
+                isExplodedView = !isExplodedView;
+                if (isExplodedView && !isSidePanelOpen) {
+                    isSidePanelOpen = true;
+                    document.getElementById("sidepanel-btn-text").textContent = "Close Glass";
+                }
+                e.currentTarget.classList.toggle("border-cyan-400", isExplodedView);
+            });
+
+            document.getElementById("toggle-rgb-btn").addEventListener("click", (e) => {
+                isRgbCycling = !isRgbCycling;
+                e.currentTarget.classList.toggle("border-cyan-400", isRgbCycling);
+            });
+
+            document.getElementById("toggle-rotate-btn").addEventListener("click", (e) => {
+                isAutoRotating = !isAutoRotating;
+                e.currentTarget.classList.toggle("border-cyan-400", isAutoRotating);
+            });
+
+            // Log Modal & Creation
+            const logModal = document.getElementById("log-modal");
+            const openLogModal = (defaultCompId) => {
+                document.getElementById("log-component").value = defaultCompId || selectedComponentId || "system";
+                document.getElementById("log-title").value = "";
+                document.getElementById("log-description").value = "";
+                logModal.classList.remove("hidden");
+            };
+
+            document.getElementById("open-log-modal-btn").addEventListener("click", () => openLogModal(selectedComponentId));
+            document.getElementById("quick-log-part-btn").addEventListener("click", () => openLogModal(selectedComponentId));
+            document.getElementById("close-log-modal").addEventListener("click", () => logModal.classList.add("hidden"));
+            document.getElementById("cancel-log-btn").addEventListener("click", () => logModal.classList.add("hidden"));
+
+            document.getElementById("new-log-form").addEventListener("submit", (e) => {
+                e.preventDefault();
+                const compId = document.getElementById("log-component").value;
+                const category = document.getElementById("log-category").value;
+                const severity = document.getElementById("log-severity").value;
+                const resolved = document.getElementById("log-resolved").value === "true";
+                const title = document.getElementById("log-title").value.trim();
+                const description = document.getElementById("log-description").value.trim();
+
+                if (!title) return;
+
+                logsData.unshift({
+                    id: "log-" + Date.now(),
+                    componentId: compId,
+                    category,
+                    severity,
+                    resolved,
+                    title,
+                    description,
+                    timestamp: Date.now()
+                });
+
+                if (!resolved && componentsData[compId]) {
+                    if (severity === "Critical") componentsData[compId].status = "Critical";
+                    else if (severity === "Warning" && componentsData[compId].status === "Optimal") {
+                        componentsData[compId].status = "Warning";
+                    }
+                    saveRigSpecsToStorage(false);
+                }
+
+                saveLogsToStorage();
+                logModal.classList.add("hidden");
+                renderComponentSidebar();
+                renderComponentLogsPreview(selectedComponentId);
+                renderFullLogsList();
+                showToast("System log entry saved");
+            });
+
+            ["filter-component", "filter-type", "filter-status"].forEach(id => {
+                document.getElementById(id).addEventListener("change", renderFullLogsList);
+            });
+
+            // Export Document
+            document.getElementById("export-doc-btn").addEventListener("click", () => {
+                const totals = calculateBuildTotals();
+                const report = {
+                    rigProfile,
+                    components: componentsData,
+                    extraBudgetItems: EXTRA_BUDGET_ITEMS,
+                    logs: logsData,
+                    priceComparisonSummary: totals,
+                    generatedAt: new Date().toISOString()
+                };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
+                const dlAnchor = document.createElement("a");
+                dlAnchor.setAttribute("href", dataStr);
+                dlAnchor.setAttribute("download", "phanteks-2024-vs-2026-market-report.json");
+                document.body.appendChild(dlAnchor);
+                dlAnchor.click();
+                dlAnchor.remove();
+                showToast("2024 vs 2026 Cost & Specs Report downloaded");
+            });
+
+            // Rename Rig Modal
+            const rigModal = document.getElementById("rig-modal");
+            document.getElementById("edit-rig-btn").addEventListener("click", () => {
+                document.getElementById("rig-name-input").value = rigProfile.rigName;
+                document.getElementById("rig-os-input").value = rigProfile.osBuild;
+                rigModal.classList.remove("hidden");
+            });
+            document.getElementById("close-rig-modal").addEventListener("click", () => rigModal.classList.add("hidden"));
+            document.getElementById("cancel-rig-btn").addEventListener("click", () => rigModal.classList.add("hidden"));
+            document.getElementById("rig-profile-form").addEventListener("submit", (e) => {
+                e.preventDefault();
+                rigProfile.rigName = document.getElementById("rig-name-input").value.trim();
+                rigProfile.osBuild = document.getElementById("rig-os-input").value.trim();
+                rigModal.classList.add("hidden");
+                saveRigSpecsToStorage(true);
+            });
+
+            // Reset Default
+            document.getElementById("reset-specs-btn").addEventListener("click", () => {
+                // Remove any user-added custom meshes from the 3D scene
+                Object.values(componentsData).forEach(c => {
+                    if (c.isCustom && componentGroups[c.id]) {
+                        pcGroup.remove(componentGroups[c.id]);
+                        interactiveMeshes = interactiveMeshes.filter(m => m.userData.componentId !== c.id);
+                        delete componentGroups[c.id];
+                    }
+                });
+                rigProfile = { ...DEFAULT_RIG_PROFILE };
+                componentsData = JSON.parse(JSON.stringify(DEFAULT_COMPONENTS));
+                Object.keys(componentsData).forEach(id => applyComponentTransform(id));
+                logsData = JSON.parse(JSON.stringify(INITIAL_SEED_LOGS));
+                saveRigSpecsToStorage(false);
+                saveLogsToStorage();
+                selectComponent("ram", false);
+                renderFullLogsList();
+                showToast("Reset to default 2024 vs 2026 pricing & specs");
+            });
+
+            // 3D Spatial & Appearance Studio Live Listeners
+            const updateSelectedTransformFromUI = () => {
+                const comp = componentsData[selectedComponentId];
+                if (!comp) return;
+                comp.transform = {
+                    x: parseFloat(document.getElementById("slider-pos-x").value) || 0,
+                    y: parseFloat(document.getElementById("slider-pos-y").value) || 0,
+                    z: parseFloat(document.getElementById("slider-pos-z").value) || 0,
+                    rotY: parseFloat(document.getElementById("slider-rot-y").value) || 0,
+                    scale: parseFloat(document.getElementById("slider-scale").value) || 1,
+                    visible: document.getElementById("check-part-visible").checked,
+                    useCustomColor: document.getElementById("check-custom-color").checked
+                };
+                comp.customColor = document.getElementById("picker-custom-color").value;
+
+                document.getElementById("val-pos-x").textContent = comp.transform.x.toFixed(2);
+                document.getElementById("val-pos-y").textContent = comp.transform.y.toFixed(2);
+                document.getElementById("val-pos-z").textContent = comp.transform.z.toFixed(2);
+                document.getElementById("val-rot-y").textContent = `${comp.transform.rotY}°`;
+                document.getElementById("val-scale").textContent = `${comp.transform.scale.toFixed(2)}x`;
+
+                applyComponentTransform(selectedComponentId);
+                saveRigSpecsToStorage(false);
+            };
+
+            ["slider-pos-x", "slider-pos-y", "slider-pos-z", "slider-rot-y", "slider-scale", "check-part-visible", "check-custom-color", "picker-custom-color"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener("input", updateSelectedTransformFromUI);
+            });
+
+            document.getElementById("reset-3d-transform-btn").addEventListener("click", () => {
+                const comp = componentsData[selectedComponentId];
+                if (!comp) return;
+                comp.transform = { x: 0, y: 0, z: 0, rotY: 0, scale: 1, visible: true, useCustomColor: false };
+                applyComponentTransform(selectedComponentId);
+                selectComponent(selectedComponentId, false);
+                saveRigSpecsToStorage(false);
+                showToast("Reset 3D position & scale for " + comp.category);
+            });
+
+            // Delete Custom Hardware Button
+            document.getElementById("delete-custom-part-btn").addEventListener("click", () => {
+                const comp = componentsData[selectedComponentId];
+                if (!comp || !comp.isCustom) return;
+                if (componentGroups[comp.id]) {
+                    pcGroup.remove(componentGroups[comp.id]);
+                    interactiveMeshes = interactiveMeshes.filter(m => m.userData.componentId !== comp.id);
+                    delete componentGroups[comp.id];
+                }
+                delete componentsData[comp.id];
+                saveRigSpecsToStorage(false);
+                selectComponent("ram", true);
+                showToast("Removed custom hardware from 3D model");
+            });
+
+            // Add New Hardware Modal & Quick Upgrade Presets
+            const addHwModal = document.getElementById("add-hw-modal");
+            const openAddHwModal = () => addHwModal.classList.remove("hidden");
+            const closeAddHwModal = () => addHwModal.classList.add("hidden");
+
+            document.getElementById("open-add-hw-modal-btn").addEventListener("click", openAddHwModal);
+            document.getElementById("sidebar-add-hw-btn").addEventListener("click", openAddHwModal);
+            document.getElementById("open-add-hw-inline-btn").addEventListener("click", openAddHwModal);
+            document.getElementById("close-add-hw-modal").addEventListener("click", closeAddHwModal);
+            document.getElementById("cancel-add-hw-btn").addEventListener("click", closeAddHwModal);
+
+            const UPGRADE_PRESETS = {
+                mx_master: {
+                    template: "desk_mouse",
+                    category: "Wireless Mouse Upgrade",
+                    model: "Logitech MX Master 3S Wireless Performance Mouse",
+                    paid: 99.99,
+                    market: 109.99,
+                    color: "#06b6d4",
+                    clock: "8000 DPI Darkfield • Quiet Clicks",
+                    temp: "MagSpeed Electromagnetic Wheel • USB-C",
+                    notes: "Planned ergonomic mouse upgrade from build notes. Placed on desk beside the MSI GM11."
+                },
+                ssd_2: {
+                    template: "nvme_slot2",
+                    category: "2nd NVMe M.2 Storage",
+                    model: "WD_BLACK 2TB SN850X NVMe Gen4 PCIe M.2 2280 SSD",
+                    paid: 139.99,
+                    market: 179.99,
+                    color: "#f43f5e",
+                    clock: "Read: 7,300 MB/s • Write: 6,600 MB/s",
+                    temp: "46°C • M2_2 Chipset Slot",
+                    notes: "Secondary high-speed game library drive installed in the Gigabyte B650 lower M.2 slot."
+                },
+                ram_64: {
+                    template: "ram_extra",
+                    category: "RAM Expansion (+32GB)",
+                    model: "G.SKILL Flare X5 Series 32GB (2 x 16GB) DDR5-6000 (64GB Total)",
+                    paid: 106.99,
+                    market: 144.99,
+                    color: "#ef4444",
+                    clock: "64GB Total (4x16GB) DDR5-6000 CL36",
+                    temp: "41°C • Populated Slots A1 & B1",
+                    notes: "Doubles total system memory to 64GB DDR5."
+                },
+                top_fans: {
+                    template: "top_fan",
+                    category: "Top Exhaust Fans (2x140mm)",
+                    model: "Phanteks M25-140 PWM D-RGB Dual Top Exhaust Fan Pack",
+                    paid: 29.99,
+                    market: 36.99,
+                    color: "#ef4444",
+                    clock: "500–1800 RPM PWM • 104.6 CFM",
+                    temp: "Top Radiator/Exhaust Mount",
+                    notes: "Adds two 140mm top exhaust fans to the Phanteks XT Pro Ultra roof panel."
+                },
+                pcie_card: {
+                    template: "pcie_addon",
+                    category: "PCIe Expansion Card",
+                    model: "Elgato 4K60 Pro MK.2 PCIe Capture Card",
+                    paid: 179.99,
+                    market: 219.99,
+                    color: "#38bdf8",
+                    clock: "4K60 HDR10 Capture • PCIe x4",
+                    temp: "39°C • Lower PCIe Slot",
+                    notes: "Installed in lower PCIe x16 slot on the Gigabyte B650 Gaming X AX."
+                }
+            };
+
+            document.querySelectorAll(".hw-preset-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const p = UPGRADE_PRESETS[btn.dataset.preset];
+                    if (!p) return;
+                    document.getElementById("new-hw-template").value = p.template;
+                    document.getElementById("new-hw-category").value = p.category;
+                    document.getElementById("new-hw-model").value = p.model;
+                    document.getElementById("new-hw-paid").value = p.paid;
+                    document.getElementById("new-hw-market").value = p.market;
+                    document.getElementById("new-hw-color").value = p.color;
+                    document.getElementById("new-hw-clock").value = p.clock;
+                    document.getElementById("new-hw-temp").value = p.temp;
+                    document.getElementById("new-hw-notes").value = p.notes;
+                });
+            });
+
+            document.getElementById("add-hw-form").addEventListener("submit", (e) => {
+                e.preventDefault();
+                const templateType = document.getElementById("new-hw-template").value;
+                const category = document.getElementById("new-hw-category").value.trim();
+                const model = document.getElementById("new-hw-model").value.trim();
+                const actualCost = parseFloat(document.getElementById("new-hw-paid").value) || 0;
+                const currentMarketPrice = parseFloat(document.getElementById("new-hw-market").value) || actualCost;
+                const customColor = document.getElementById("new-hw-color").value || "#06b6d4";
+                const clock = document.getElementById("new-hw-clock").value.trim() || "Custom Spec";
+                const temp = document.getElementById("new-hw-temp").value.trim() || "Optimal";
+                const notes = document.getElementById("new-hw-notes").value.trim() || "Added via 3D Hardware Studio.";
+
+                const iconMap = {
+                    nvme_slot2: "fa-hard-drive",
+                    ram_extra: "fa-memory",
+                    top_fan: "fa-fan",
+                    pcie_addon: "fa-sd-card",
+                    sata_ssd: "fa-hard-drive",
+                    desk_mouse: "fa-computer-mouse",
+                    speakers: "fa-volume-high",
+                    webcam: "fa-camera",
+                    custom_box: "fa-cube"
+                };
+
+                const newId = "custom_" + Date.now();
+                const newComp = {
+                    id: newId,
+                    isCustom: true,
+                    templateType,
+                    category,
+                    icon: iconMap[templateType] || "fa-cube",
+                    model,
+                    actualCost,
+                    currentMarketPrice,
+                    projectedCost: "Upgrade",
+                    clock,
+                    temp,
+                    status: "Optimal",
+                    driver: "Custom 3D Node",
+                    marketFactor: "Future Upgrade / Custom Addition",
+                    notes,
+                    customColor,
+                    transform: { x: 0, y: 0, z: 0, rotY: 0, scale: 1, visible: true, useCustomColor: false }
+                };
+
+                componentsData[newId] = newComp;
+                buildCustomHardwareMesh(newComp);
+                applyComponentTransform(newId);
+
+                // Also add the new component to the Log Modal dropdown & filter dropdown
+                const logSelect = document.getElementById("log-component");
+                const filterSelect = document.getElementById("filter-component");
+                if (logSelect) {
+                    const opt = document.createElement("option");
+                    opt.value = newId;
+                    opt.textContent = `${category}: ${model.slice(0, 28)}`;
+                    logSelect.appendChild(opt);
+                }
+                if (filterSelect) {
+                    const opt2 = document.createElement("option");
+                    opt2.value = newId;
+                    opt2.textContent = category;
+                    filterSelect.appendChild(opt2);
+                }
+
+                closeAddHwModal();
+                saveRigSpecsToStorage(false);
+                selectComponent(newId, true);
+                showToast(`Added "${category}" to 3D model & cost ledger!`);
+            });
+
+            setupWorkspaceLayoutAndResizers();
+        }
+
+        // ============================================================================
+        // 5B. INTERACTIVE SECTION RESIZING, REORDERING & DRAGGABLE HUD OVERLAYS
+        // ============================================================================
+        const STORAGE_KEY_LAYOUT = "phanteks_workspace_layout_v1";
+
+        function setupWorkspaceLayoutAndResizers() {
+            const sidebar = document.getElementById("section-sidebar");
+            const viewport = document.getElementById("section-viewport");
+            const inspector = document.getElementById("section-inspector");
+            const resizerLeft = document.getElementById("resizer-left");
+            const resizerRight = document.getElementById("resizer-right");
+
+            let layoutConfig = {
+                sidebarWidth: 295,
+                inspectorWidth: 495,
+                preset: "standard"
+            };
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_LAYOUT);
+                if (saved) layoutConfig = { ...layoutConfig, ...JSON.parse(saved) };
+            } catch (e) {}
+
+            function applyLayoutConfig() {
+                if (window.innerWidth >= 1024) {
+                    sidebar.style.width = `${layoutConfig.sidebarWidth}px`;
+                    inspector.style.width = `${layoutConfig.inspectorWidth}px`;
+                } else {
+                    sidebar.style.width = "100%";
+                    inspector.style.width = "100%";
+                }
+
+                if (layoutConfig.preset === "standard") {
+                    sidebar.style.order = "1";
+                    resizerLeft.style.order = "2";
+                    viewport.style.order = "3";
+                    resizerRight.style.order = "4";
+                    inspector.style.order = "5";
+                } else if (layoutConfig.preset === "wide3d") {
+                    viewport.style.order = "1";
+                    resizerLeft.style.order = "2";
+                    sidebar.style.order = "3";
+                    resizerRight.style.order = "4";
+                    inspector.style.order = "5";
+                } else if (layoutConfig.preset === "swap") {
+                    inspector.style.order = "1";
+                    resizerLeft.style.order = "2";
+                    viewport.style.order = "3";
+                    resizerRight.style.order = "4";
+                    sidebar.style.order = "5";
+                }
+
+                updatePresetButtonsUI(layoutConfig.preset);
+                setTimeout(onWindowResize, 30);
+            }
+
+            function updatePresetButtonsUI(activePreset) {
+                const presets = {
+                    standard: document.getElementById("layout-preset-standard"),
+                    wide3d: document.getElementById("layout-preset-wide3d"),
+                    swap: document.getElementById("layout-preset-swap")
+                };
+                Object.entries(presets).forEach(([key, btn]) => {
+                    if (!btn) return;
+                    if (key === activePreset) {
+                        btn.className = "px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-medium transition";
+                    } else {
+                        btn.className = "px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition";
+                    }
+                });
+            }
+
+            function saveLayoutConfig() {
+                try {
+                    localStorage.setItem(STORAGE_KEY_LAYOUT, JSON.stringify(layoutConfig));
+                } catch (e) {}
+            }
+
+            function attachResizer(gutterEl, isFirstSplitter) {
+                let startX = 0;
+                let startSidebarW = 0;
+                let startInspectorW = 0;
+
+                gutterEl.addEventListener("mousedown", (e) => {
+                    e.preventDefault();
+                    startX = e.clientX;
+                    startSidebarW = sidebar.getBoundingClientRect().width;
+                    startInspectorW = inspector.getBoundingClientRect().width;
+                    gutterEl.classList.add("dragging");
+                    document.body.style.cursor = "col-resize";
+
+                    function onMouseMove(ev) {
+                        const dx = ev.clientX - startX;
+                        if (layoutConfig.preset === "standard") {
+                            if (isFirstSplitter) {
+                                layoutConfig.sidebarWidth = Math.max(200, Math.min(560, startSidebarW + dx));
+                                sidebar.style.width = `${layoutConfig.sidebarWidth}px`;
+                            } else {
+                                layoutConfig.inspectorWidth = Math.max(290, Math.min(820, startInspectorW - dx));
+                                inspector.style.width = `${layoutConfig.inspectorWidth}px`;
+                            }
+                        } else if (layoutConfig.preset === "wide3d") {
+                            if (isFirstSplitter) {
+                                layoutConfig.sidebarWidth = Math.max(200, Math.min(560, startSidebarW - dx));
+                                sidebar.style.width = `${layoutConfig.sidebarWidth}px`;
+                            } else {
+                                layoutConfig.inspectorWidth = Math.max(290, Math.min(820, startInspectorW - dx));
+                                inspector.style.width = `${layoutConfig.inspectorWidth}px`;
+                            }
+                        } else if (layoutConfig.preset === "swap") {
+                            if (isFirstSplitter) {
+                                layoutConfig.inspectorWidth = Math.max(290, Math.min(820, startInspectorW + dx));
+                                inspector.style.width = `${layoutConfig.inspectorWidth}px`;
+                            } else {
+                                layoutConfig.sidebarWidth = Math.max(200, Math.min(560, startSidebarW - dx));
+                                sidebar.style.width = `${layoutConfig.sidebarWidth}px`;
+                            }
+                        }
+                        onWindowResize();
+                    }
+
+                    function onMouseUp() {
+                        gutterEl.classList.remove("dragging");
+                        document.body.style.cursor = "";
+                        saveLayoutConfig();
+                        window.removeEventListener("mousemove", onMouseMove);
+                        window.removeEventListener("mouseup", onMouseUp);
+                    }
+
+                    window.addEventListener("mousemove", onMouseMove);
+                    window.addEventListener("mouseup", onMouseUp);
+                });
+            }
+
+            attachResizer(resizerLeft, true);
+            attachResizer(resizerRight, false);
+
+            const stdBtn = document.getElementById("layout-preset-standard");
+            if (stdBtn) {
+                stdBtn.addEventListener("click", () => {
+                    layoutConfig.preset = "standard";
+                    applyLayoutConfig();
+                    saveLayoutConfig();
+                    showToast("Layout: Standard (List | 3D | Inspector)");
+                });
+            }
+
+            const wideBtn = document.getElementById("layout-preset-wide3d");
+            if (wideBtn) {
+                wideBtn.addEventListener("click", () => {
+                    layoutConfig.preset = "wide3d";
+                    applyLayoutConfig();
+                    saveLayoutConfig();
+                    showToast("Layout: 3D Left (3D | List | Inspector)");
+                });
+            }
+
+            const swapBtn = document.getElementById("layout-preset-swap");
+            if (swapBtn) {
+                swapBtn.addEventListener("click", () => {
+                    layoutConfig.preset = "swap";
+                    applyLayoutConfig();
+                    saveLayoutConfig();
+                    showToast("Layout: Swapped Sides (Inspector | 3D | List)");
+                });
+            }
+
+            const resetLayoutBtn = document.getElementById("reset-layout-btn");
+            if (resetLayoutBtn) {
+                resetLayoutBtn.addEventListener("click", () => {
+                    layoutConfig = { sidebarWidth: 295, inspectorWidth: 495, preset: "standard" };
+                    applyLayoutConfig();
+                    saveLayoutConfig();
+
+                    const inspectHud = document.getElementById("hud-card-inspect");
+                    const powerHud = document.getElementById("hud-card-power");
+                    const controlsHud = document.getElementById("hud-card-controls");
+                    if (inspectHud) { inspectHud.style.top = "12px"; inspectHud.style.left = "12px"; inspectHud.style.right = "auto"; inspectHud.style.bottom = "auto"; }
+                    if (powerHud) { powerHud.style.top = "12px"; powerHud.style.right = "12px"; powerHud.style.left = "auto"; powerHud.style.bottom = "auto"; }
+                    if (controlsHud) { controlsHud.style.bottom = "16px"; controlsHud.style.left = "50%"; controlsHud.style.top = "auto"; controlsHud.style.transform = "translateX(-50%)"; }
+                    showToast("Reset section sizes & HUD positions");
+                });
+            }
+
+            ["hud-card-inspect", "hud-card-power", "hud-card-controls"].forEach(hudId => {
+                const hudEl = document.getElementById(hudId);
+                if (!hudEl) return;
+
+                let isDraggingHud = false;
+                let dragOffsetX = 0;
+                let dragOffsetY = 0;
+
+                hudEl.addEventListener("mousedown", (e) => {
+                    if (e.target.closest("button")) return;
+                    e.stopPropagation();
+                    isDraggingHud = true;
+                    const rect = hudEl.getBoundingClientRect();
+                    const parentRect = viewport.getBoundingClientRect();
+
+                    hudEl.style.transform = "none";
+                    hudEl.style.right = "auto";
+                    hudEl.style.bottom = "auto";
+                    hudEl.style.left = `${rect.left - parentRect.left}px`;
+                    hudEl.style.top = `${rect.top - parentRect.top}px`;
+
+                    dragOffsetX = e.clientX - rect.left;
+                    dragOffsetY = e.clientY - rect.top;
+
+                    function onHudMove(ev) {
+                        if (!isDraggingHud) return;
+                        const pRect = viewport.getBoundingClientRect();
+                        const newLeft = Math.max(6, Math.min(pRect.width - rect.width - 6, ev.clientX - pRect.left - dragOffsetX));
+                        const newTop = Math.max(6, Math.min(pRect.height - rect.height - 6, ev.clientY - pRect.top - dragOffsetY));
+                        hudEl.style.left = `${newLeft}px`;
+                        hudEl.style.top = `${newTop}px`;
+                    }
+
+                    function onHudUp() {
+                        isDraggingHud = false;
+                        window.removeEventListener("mousemove", onHudMove);
+                        window.removeEventListener("mouseup", onHudUp);
+                    }
+
+                    window.addEventListener("mousemove", onHudMove);
+                    window.addEventListener("mouseup", onHudUp);
+                });
+            });
+
+            applyLayoutConfig();
+            window.addEventListener("resize", () => {
+                if (window.innerWidth < 1024) {
+                    sidebar.style.width = "100%";
+                    inspector.style.width = "100%";
+                } else {
+                    sidebar.style.width = `${layoutConfig.sidebarWidth}px`;
+                    inspector.style.width = `${layoutConfig.inspectorWidth}px`;
+                }
+            });
+        }
+
+        // ============================================================================
+        // 6. WINDOW ONLOAD BOOTSTRAP
+        // ============================================================================
+        window.onload = function () {
+            loadSavedData();
+            initThreeJS();
+            setupUIEventListeners();
+            renderComponentSidebar();
+            renderYoYInflationTable();
+            renderFullLogsList();
+            updatePowerConsumptionCalculator();
+            selectComponent("ram", false);
+            animate();
+        };
+    </script>
+</body>
+</html>
